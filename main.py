@@ -35,7 +35,10 @@ if __name__ == '__main__':
     plt.plot(V[0, :], V[1, :], label="Target")
     plt.savefig("Plots/Trajectory_to_track.jpg")
 
-    LTI_instance = LinearTracking.LinearTracking(A = A, B = B, Q = Q, R = R, Qf = P, init_state = x_0, traj = V, w_scale=0.1, e_scale=0)
+    np.random.seed(1)
+    ws = 0.1 * np.random.uniform(-1, 1, size=(n, T))
+    es = 0.0 * np.random.uniform(-1, 1, size=(n, T))
+    LTI_instance = LinearTracking.LinearTracking(A = A, B = B, Q = Q, R = R, Qf = P, init_state = x_0, traj = V, ws=ws, es=es)
 
     for t in range(T):
         current_state, context = LTI_instance.observe(k)

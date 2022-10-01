@@ -2,15 +2,13 @@ import Environment
 import numpy as np
 
 class LinearTracking(Environment.Environment):
-    def __init__(self, A, B, Q, R, Qf, init_state, traj, w_scale = 0.1, e_scale = 0.03, random_seed = 1):
+    def __init__(self, A, B, Q, R, Qf, init_state, traj, ws, es=None, w_hats=None):
         self.A = A
         self.B = B
         self.Q = Q
         self.R = R
         self.Qf = Qf
         self.V = traj
-        self.w_scale = w_scale
-        self.e_scale = e_scale
         self.init_state = init_state
         self.partial_f_x = []   # partial f_t/x_t
         self.partial_f_u = []   # partial f_t/u_t
@@ -26,10 +24,10 @@ class LinearTracking(Environment.Environment):
         sys_params = (A, B, Q, R)
         super().__init__(sys_params, init_state)
 
-        # generate the disturbances sequence and the observation noise sequence
-        np.random.seed(random_seed)
-        self.W = np.random.uniform(low=- self.w_scale, high=self.w_scale, size=(self.n, self.T))
-        self.E = np.random.uniform(low=- self.e_scale, high=self.e_scale, size=(self.n, self.T))
+        assert es is None or w_hats is None
+        self.W = ws
+        self.E = es
+        self.What = w_hats
 
         # set the time counter to be zero
         self.time_counter = 0
@@ -40,9 +38,13 @@ class LinearTracking(Environment.Environment):
 
         # construct the predicted disturbances sequence
         pred_horizon = min(self.T - t, k)
-        predicted_disturbances = np.copy(self.W[:, t:t + pred_horizon])
-        for i in range(pred_horizon):
-            predicted_disturbances[:, i:] += np.tile(self.E[:, t + i:t + i + 1], pred_horizon - i)
+        if self.E is not None:
+            predicted_disturbances = np.copy(self.W[:, t:t + pred_horizon])
+            for i in range(pred_horizon):
+                predicted_disturbances[:, i:] += np.tile(self.E[:, t + i:t + i + 1], pred_horizon - i)
+        else:
+            assert self.What is not None
+            predicted_disturbances = self.What[:, t:t + pred_horizon]
 
         # is this the final time step?
         is_terminal = False

@@ -3,8 +3,9 @@ from scipy import linalg as la
 import numpy as np
 import cvxpy as cp
 
+
 class MPCLTI(Controller.Controller):
-    def __init__(self, initial_param, buffer_length, learning_rate):
+    def __init__(self, initial_param, buffer_length, learning_rate, horizon=None):
         super().__init__(initial_param, buffer_length, learning_rate)
         self.partial_u_theta = []
         self.partial_u_x = []
@@ -18,7 +19,11 @@ class MPCLTI(Controller.Controller):
         self.Multipliers = []
         self.n = None
         self.m = None
-        self.max_k = initial_param.shape[0]
+        if horizon is None:
+            self.max_k = initial_param.shape[0]
+        else:
+            assert initial_param.size == 1
+            self.max_k = horizon
 
     def decide_action(self, state, context):
         is_terminal, predicted_disturbances, V, sys_params = context
@@ -36,14 +41,23 @@ class MPCLTI(Controller.Controller):
             self.m = self.B.shape[1]
         k = predicted_disturbances.shape[1]
         control_action = - self.K@(state - V[:, 0])
-        grad_list = []
-        for i in range(k):
-            grad_list.append(self.Multipliers[i]@(predicted_disturbances[:, i]))
-            control_action += (self.param[i]*grad_list[-1] + self.Multipliers[i]@(self.A@V[:, i] - V[:, i+1]))
-        for i in range(self.max_k - k):
-            grad_list.append(np.zeros(self.m))
         self.partial_u_x.append(-self.K)
-        self.partial_u_theta.append(np.transpose(np.stack(grad_list, axis=0)))
+        if self.param.size > 1:
+            grad_list = []
+            for i in range(k):
+                grad_list.append(self.Multipliers[i]@(predicted_disturbances[:, i]))
+                control_action += (self.param[i]*grad_list[-1] + self.Multipliers[i]@(self.A@V[:, i] - V[:, i+1]))
+            for i in range(self.max_k - k):
+                grad_list.append(np.zeros(self.m))
+            self.partial_u_theta.append(np.transpose(np.stack(grad_list, axis=0)))
+        else:
+            grad = np.zeros_like(control_action)
+            for i in range(k):
+                this_grad = self.Multipliers[i]@(predicted_disturbances[:, i])
+                control_action += (self.param*this_grad + self.Multipliers[i]@(self.A@V[:, i] - V[:, i+1]))
+                grad += this_grad
+            self.partial_u_theta.append(grad)
+
         return control_action
 
     def update_param(self, grads):
@@ -65,11 +79,7 @@ class MPCLTI(Controller.Controller):
 
         new_param = self.param - self.learning_rate * G
         # the projection step
-        for j in range(self.max_k):
-            if new_param[j] > 1.0:
-                new_param[j] = 1.0
-            elif new_param[j] < 0:
-                new_param[j] = 0.0
+        new_param = np.clip(new_param, 0.0, 1.0)
         self.param = new_param
         self.param_history.append(new_param)
         if len(new_buffer) > self.buffer_length:
