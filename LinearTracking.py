@@ -2,34 +2,32 @@ import Environment
 import numpy as np
 
 class LinearTracking(Environment.Environment):
-    def __init__(self, A, B, Q, R, Qf, init_state, traj, w_scale = 0.1, e_scale = 0.03, random_seed = 1):
+    def __init__(self, A, B, Q, R, Qf, init_state, traj, ws, es=None, w_hats=None):
         self.A = A
         self.B = B
         self.Q = Q
         self.R = R
         self.Qf = Qf
         self.V = traj
-        self.w_scale = w_scale
-        self.e_scale = e_scale
         self.init_state = init_state
         self.partial_f_x = []   # partial f_t/x_t
         self.partial_f_u = []   # partial f_t/u_t
         self.partial_g_x = []   # partial g_t/x_t
         self.partial_g_u = []   # partial g_t/u_t
         self.x_history = [init_state]
+        self.cost_history = []
 
         self.n = self.B.shape[0]  # the dimension of the state
         self.m = self.B.shape[1]  # the dimension of the control action
         self.T = self.V.shape[1] - 1  # the total length of the horizon
-        self.total_cost = 0  # the total cost incurred so far
 
         sys_params = (A, B, Q, R)
         super().__init__(sys_params, init_state)
 
-        # generate the disturbances sequence and the observation noise sequence
-        np.random.seed(random_seed)
-        self.W = np.random.uniform(low=- self.w_scale, high=self.w_scale, size=(self.n, self.T))
-        self.E = np.random.uniform(low=- self.e_scale, high=self.e_scale, size=(self.n, self.T))
+        assert es is None or w_hats is None
+        self.W = ws
+        self.E = es
+        self.What = w_hats
 
         # set the time counter to be zero
         self.time_counter = 0
@@ -40,9 +38,13 @@ class LinearTracking(Environment.Environment):
 
         # construct the predicted disturbances sequence
         pred_horizon = min(self.T - t, k)
-        predicted_disturbances = np.copy(self.W[:, t:t + pred_horizon])
-        for i in range(pred_horizon):
-            predicted_disturbances[:, i:] += np.tile(self.E[:, t + i:t + i + 1], pred_horizon - i)
+        if self.E is not None:
+            predicted_disturbances = np.copy(self.W[:, t:t + pred_horizon])
+            for i in range(pred_horizon):
+                predicted_disturbances[:, i:] += np.tile(self.E[:, t + i:t + i + 1], pred_horizon - i)
+        else:
+            assert self.What is not None
+            predicted_disturbances = self.What[:, t:t + pred_horizon]
 
         # is this the final time step?
         is_terminal = False
@@ -56,8 +58,11 @@ class LinearTracking(Environment.Environment):
     # return the available gradients (f_t/x_t, f_t/u_t, g_t/x_t, g_t/u_t)
     def step(self, control_action):
         t = self.time_counter
-        self.total_cost += (self.state - self.V[:, t]) @ self.Q @ (self.state - self.V[:, t])
-        self.total_cost += control_action @ self.R @ control_action
+        stage_cost = (
+            (self.state - self.V[:, t]) @ self.Q @ (self.state - self.V[:, t]) +
+            control_action @ self.R @ control_action
+        )
+        self.cost_history.append(stage_cost)
         grads = (2 * (self.state - self.V[:, t]) @ self.Q, 2 * control_action @ self.R, self.A, self.B)
         self.partial_f_x.append(grads[0])
         self.partial_f_u.append(grads[1])
@@ -77,8 +82,8 @@ class LinearTracking(Environment.Environment):
     # return the total cost incurred on this trajectory
     def reset(self):
         t = self.time_counter
-        self.total_cost += (self.state - self.V[:, t]) @ self.Qf @ (self.state - self.V[:, t])
-        total_cost = self.total_cost
+        final_cost = (self.state - self.V[:, t]) @ self.Qf @ (self.state - self.V[:, t])
+        self.cost_history.append(final_cost)
         self.state = self.init_state
         self.time_counter = 0
         self.total_cost = 0
@@ -88,5 +93,7 @@ class LinearTracking(Environment.Environment):
         self.partial_g_u = []
         whole_trajectory = np.transpose(np.stack(self.x_history, axis=0))
         self.x_history = []
-        return total_cost, whole_trajectory
+        cost_history = np.array(self.cost_history)
+        self.cost_history = []
+        return cost_history, whole_trajectory
 

@@ -35,7 +35,10 @@ if __name__ == '__main__':
     plt.plot(V[0, :], V[1, :], label="Target")
     plt.savefig("Plots/Trajectory_to_track.jpg")
 
-    LTI_instance = LinearTracking.LinearTracking(A = A, B = B, Q = Q, R = R, Qf = P, init_state = x_0, traj = V, w_scale=0.1, e_scale=0)
+    np.random.seed(1)
+    ws = 0.1 * np.random.uniform(-1, 1, size=(n, T))
+    es = 0.0 * np.random.uniform(-1, 1, size=(n, T))
+    LTI_instance = LinearTracking.LinearTracking(A = A, B = B, Q = Q, R = R, Qf = P, init_state = x_0, traj = V, ws=ws, es=es)
 
     for t in range(T):
         current_state, context = LTI_instance.observe(k)
@@ -43,7 +46,8 @@ if __name__ == '__main__':
         grad_tuple = LTI_instance.step(control_action)
         MPC_instance.update_param(grad_tuple)
 
-    total_cost, whole_trajectory = LTI_instance.reset()
+    cost_history, whole_trajectory = LTI_instance.reset()
+    total_cost = np.sum(cost_history)
     print(total_cost)
     plt.plot(whole_trajectory[0, :], whole_trajectory[1, :], label="Controller")
     plt.legend()
