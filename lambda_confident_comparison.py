@@ -108,6 +108,14 @@ class SelfTuningLambdaConfidentControl:
 
 def main():
 
+    # LQR instance.
+    A = 2 * np.eye(1)
+    B = np.eye(1)
+    Q = np.eye(1)
+    R = np.eye(1)
+    P = solve_discrete_are(A, B, Q, R)
+    x0 = np.zeros(1)
+
     # Constants that should be reported in the paper.
     T = 400
     W_BOUND = 2
@@ -117,7 +125,7 @@ def main():
     INITIAL_LAMBDA = 1.0
     ROLLING_MEAN = 10
     # TODO: Correct choices for these constants?
-    LEARNING_RATE = 2e-1 / (W_BOUND * np.sqrt(T))
+    LEARNING_RATE = 4e-1 / (np.trace(P) * W_BOUND * np.sqrt(T))
     PREDICTION_HORIZON = int(np.log(T))
     GRADIENT_BUFFER = int(np.log(T))
 
@@ -129,24 +137,18 @@ def main():
     predicted_disturbances[:become_good, 0] += W_BOUND * np.random.uniform(-1, 1, size=become_good)
     predicted_disturbances[become_good:, 0] += W_SMALL_FACTOR * W_BOUND * np.random.uniform(-1, 1, size=T-become_good)
 
-    # LQR instance.
-    A = np.eye(1)
-    B = np.eye(1)
-    Q = np.eye(1)
-    R = np.eye(1)
-    x0 = np.zeros(1)
-
 
     #
     # Lambda-confident rollout.
     #
     confident = SelfTuningLambdaConfidentControl(A, B, Q, R, predicted_disturbances, initial_trust=INITIAL_LAMBDA)
-    x_errors_confident = []
+    costs_confident = []
     x = x0
     for w in disturbances:
         u = confident.step(x)
+        costs_confident.append(x.T @ Q @ x + u.T @ R @ u)
         x = A @ x + B @ u + w
-        x_errors_confident.append(np.abs(x[0]) ** 2)
+    costs_confident.append(x.T @ P @ x)
 
 
     #
@@ -156,7 +158,6 @@ def main():
 
     # This experiment is just a regulator, but the LinearTracking API expects a target trajectory.
     target_traj = np.zeros((1, T + 1))
-    P = solve_discrete_are(A, B, Q, R)
     LTI_instance = LinearTracking.LinearTracking(
         A, B, Q, R, Qf=P,
         init_state=x0,
@@ -185,13 +186,12 @@ def main():
     ax_lam.set_ylim([-0.1, 1.1])
     ax_lam.set_ylabel("confidence $\\lambda$")
 
-    _, whole_trajectory = LTI_instance.reset()
-    x_errors_ours = np.abs(whole_trajectory).squeeze() ** 2
-    x_errors_ours = pd.Series(x_errors_ours).rolling(ROLLING_MEAN).mean()
-    x_errors_confident = pd.Series(x_errors_confident).rolling(ROLLING_MEAN).mean()
-    ax_err.plot(x_errors_confident, color="black", label="$\\lambda$-confident")
-    ax_err.plot(x_errors_ours, color="black", linestyle="--", label="ours")
-    ax_err.set_ylabel("$\\| x \\|^2$ (moving average)")
+    costs_ours, whole_trajectory = LTI_instance.reset()
+    costs_ours = pd.Series(costs_ours).rolling(ROLLING_MEAN).mean()
+    costs_confident = pd.Series(costs_confident).rolling(ROLLING_MEAN).mean()
+    ax_err.plot(costs_confident, color="black", label="$\\lambda$-confident")
+    ax_err.plot(costs_ours, color="black", linestyle="--", label="ours")
+    ax_err.set_ylabel("LQR cost (moving average)")
 
     for ax in axs:
         ax.set_xlabel("time")

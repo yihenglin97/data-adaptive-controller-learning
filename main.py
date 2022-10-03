@@ -46,7 +46,8 @@ if __name__ == '__main__':
         grad_tuple = LTI_instance.step(control_action)
         MPC_instance.update_param(grad_tuple)
 
-    total_cost, whole_trajectory = LTI_instance.reset()
+    cost_history, whole_trajectory = LTI_instance.reset()
+    total_cost = np.sum(cost_history)
     print(total_cost)
     plt.plot(whole_trajectory[0, :], whole_trajectory[1, :], label="Controller")
     plt.legend()

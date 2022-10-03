@@ -1,7 +1,6 @@
 import Controller
 from scipy import linalg as la
 import numpy as np
-import cvxpy as cp
 
 
 class MPCLTI(Controller.Controller):

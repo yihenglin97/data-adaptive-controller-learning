@@ -15,11 +15,11 @@ class LinearTracking(Environment.Environment):
         self.partial_g_x = []   # partial g_t/x_t
         self.partial_g_u = []   # partial g_t/u_t
         self.x_history = [init_state]
+        self.cost_history = []
 
         self.n = self.B.shape[0]  # the dimension of the state
         self.m = self.B.shape[1]  # the dimension of the control action
         self.T = self.V.shape[1] - 1  # the total length of the horizon
-        self.total_cost = 0  # the total cost incurred so far
 
         sys_params = (A, B, Q, R)
         super().__init__(sys_params, init_state)
@@ -58,8 +58,11 @@ class LinearTracking(Environment.Environment):
     # return the available gradients (f_t/x_t, f_t/u_t, g_t/x_t, g_t/u_t)
     def step(self, control_action):
         t = self.time_counter
-        self.total_cost += (self.state - self.V[:, t]) @ self.Q @ (self.state - self.V[:, t])
-        self.total_cost += control_action @ self.R @ control_action
+        stage_cost = (
+            (self.state - self.V[:, t]) @ self.Q @ (self.state - self.V[:, t]) +
+            control_action @ self.R @ control_action
+        )
+        self.cost_history.append(stage_cost)
         grads = (2 * (self.state - self.V[:, t]) @ self.Q, 2 * control_action @ self.R, self.A, self.B)
         self.partial_f_x.append(grads[0])
         self.partial_f_u.append(grads[1])
@@ -79,8 +82,8 @@ class LinearTracking(Environment.Environment):
     # return the total cost incurred on this trajectory
     def reset(self):
         t = self.time_counter
-        self.total_cost += (self.state - self.V[:, t]) @ self.Qf @ (self.state - self.V[:, t])
-        total_cost = self.total_cost
+        final_cost = (self.state - self.V[:, t]) @ self.Qf @ (self.state - self.V[:, t])
+        self.cost_history.append(final_cost)
         self.state = self.init_state
         self.time_counter = 0
         self.total_cost = 0
@@ -90,5 +93,7 @@ class LinearTracking(Environment.Environment):
         self.partial_g_u = []
         whole_trajectory = np.transpose(np.stack(self.x_history, axis=0))
         self.x_history = []
-        return total_cost, whole_trajectory
+        cost_history = np.array(self.cost_history)
+        self.cost_history = []
+        return cost_history, whole_trajectory
 
