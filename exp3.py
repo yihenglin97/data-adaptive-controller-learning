@@ -2,13 +2,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def exp3(rng, k, T):
+def exp3(rng, arms, T=None, rate=None):
     """EXP3 algorithm for adversarial MAB with costs (not rewards).
 
     Is a generator. Use like:
 
         rng = np.random.default_rng()
-        algo = exp3(rng, k, T)
+        algo = exp3(...)
         loss = None
         for t in range(T):
             i = algo.send(loss)
@@ -19,17 +19,19 @@ def exp3(rng, k, T):
     with multiplicative-update optimization implemented.
     """
 
-    # Choose optimal eta for known T.
-    eta = np.sqrt(np.log(k) / (T * k))
+    # Choose optimal rate for known T.
+    if rate is None:
+        assert T is not None
+        rate = np.sqrt(np.log(arms) / (T * arms))
 
     # Initialize weights with exp(0).
-    y = np.ones(k)
+    y = np.ones(arms)
 
     while True:
         p = y / np.sum(y)
-        i = rng.choice(k, p=p)
+        i = rng.choice(arms, p=p)
         loss = yield i
-        y[i] *= np.exp(-eta * loss / p[i])
+        y[i] *= np.exp(-rate * loss / p[i])
 
 
 def main():

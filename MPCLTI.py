@@ -86,5 +86,3 @@ class MPCLTI(Controller.Controller):
         else:
             self.buffer = new_buffer
         return self.param
-
-    
