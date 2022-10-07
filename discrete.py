@@ -25,6 +25,9 @@ class MPCHorizonSelector:
         self.arm_history = []
         self.loss_history = []
 
+        # TODO: Remove hack - to avoid computing gradients when not needed.
+        self.learning_rate = 0
+
     def decide_action(self, state, context):
         if self.i_batch == self.batch:
             self.arm_history.append(self.arm)

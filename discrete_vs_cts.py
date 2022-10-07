@@ -42,63 +42,45 @@ def run(lti, horizon, controller, T):
     return cost_traj, state_traj
 
 
-def discretized_double_integrator(dt):
-    """Our example system."""
-    A, B = np.eye(4), np.zeros((4, 2))
-    A[0, 2], A[1, 3] = dt, dt
-    B[2, 0], B[3, 1] = dt, dt
-    Q = np.eye(4)
-    Q[2, 2], Q[3, 3] = 0, 0
-    R = np.eye(2) * 1e-1
-    return A, B, Q, R
-
-
 def main():
 
     T = 100000
-    dt = 0.2
 
-    # Choose magnitude of disturbances and their prediction errors.
-    W_MAG = 1e0
-    E_MAG = 0.3 * W_MAG
+    # These parameters all affect the costs of the different MPC horizons.
+    DT = 0.1
+    W_MAG = 1.0 * DT
+    E_MAG = 0.25 * W_MAG
+    R_SCALE = 1e-2
 
-    # Set up the LQ problem instance.
-    A, B, Q, R = discretized_double_integrator(dt)
+    # Set up the LQ problem instance: discretized double integrator.
+    zero2x2 = np.zeros((2, 2))
+    A = np.block([
+        [np.eye(2), DT * np.eye(2)],
+        [  zero2x2,      np.eye(2)],
+    ])
+    B = np.block([
+        [       zero2x2],
+        [DT * np.eye(2)],
+    ])
+    Q = np.block([
+        [DT * np.eye(2), zero2x2],
+        [       zero2x2, zero2x2],
+    ])
+    R = R_SCALE * DT * np.eye(2)
     n, m = B.shape
-    # This scale was manually tuned so that, when W_MAG = 1 and E_MAG = 0.3,
-    # the average 1-step cost is <= 1 for any MPC with horizon in {0, ..., 7}.
-    scale = 1.0 / 5
-    Q *= scale
-    R *= scale
     P = solve_discrete_are(A, B, Q, R)
-    x_0 = np.array([0, 0, 0, 0])
+    x_0 = np.zeros(4)
 
     # The MPC horizons we'll be selecting between.
     max_horizon = 7
     horizons = np.arange(max_horizon + 1)
     n_horizons = len(horizons)
 
-    # Properties of the continuous algorithm.
-    GRAD_BUFFER_LENGTH = 50
-
     plt.rc("figure.constrained_layout", use=True)
 
-    # Generate a trajectory for tracking.
-    V_MAG = 0e0
-    V = np.zeros((n, T + 1))
-    V[:, 0] = x_0
-    slow_hertz = 0.2
-    fast_hertz = 1.0
-    slow_scale = 2 * np.pi / slow_hertz
-    fast_scale = 2 * np.pi / fast_hertz
-    for t in range(1, T + 1):
-        V[0, t] = 2.0 * np.cos(slow_scale * t * dt) + np.cos(fast_scale * t * dt)
-        V[1, t] = 2.0 * np.sin(slow_scale * t * dt) + np.sin(fast_scale * t * dt)
-        V[2, t] = (V[0, t] - V[0, t - 1]) / dt
-        V[3, t] = (V[1, t] - V[1, t - 1]) / dt
-    V *= V_MAG
-    plt.plot(V[0, :], V[1, :], label="Target")
-    plt.savefig("Plots/Trajectory_to_track.pdf")
+    # Tracking trajectory is zero so we can more easily control the
+    # signal-to-noise tradeoff in the disturbance predictions.
+    target_trajectory = np.zeros((n, T + 1))
 
     # Generate the true disturbances and the random variables we'll use to
     # generate noisy predictions.
@@ -107,7 +89,27 @@ def main():
     es = E_MAG * np.random.uniform(-1, 1, size=(n, T))
 
     # The complete problem instance has now been determined.
-    LTI_instance = LinearTracking(A, B, Q, R, Qf=P, init_state=x_0, traj=V, ws=ws, es=es)
+    LTI_instance = LinearTracking(A, B, Q, R, Qf=P, init_state=x_0, traj=target_trajectory, ws=ws, es=es)
+
+    # First, estimate the costs for each horizon.
+    cost_estimate_batch = T
+    cost_histories = []
+    for k in horizons:
+        mpc = MPCLTI(np.ones(k), buffer_length=0, learning_rate=0.0)
+        cost_history, _ = run(LTI_instance, k, mpc, T)
+        cost_histories.append(cost_history)
+
+    # Rescale the costs for EXP3.
+    cost_histories = np.array(cost_histories)
+    step_losses = np.sum(cost_histories, axis=1) / cost_estimate_batch
+    cost_scale = 1.0 / np.amax(step_losses)
+    step_losses *= cost_scale
+    Q *= cost_scale
+    R *= cost_scale
+    P *= cost_scale
+    cost_histories *= cost_scale  # Used to compute regret later.
+    # Scaling Q and R by the same value doesn't affect the optimal controller 
+    LTI_instance = LinearTracking(A, B, Q, R, Qf=P, init_state=x_0, traj=target_trajectory, ws=ws, es=es)
 
     # Stuff to make our plots look better.
     bar_kwargs = dict(color="#BBBBBB", edgecolor="black", linewidth=0.5)
@@ -123,22 +125,13 @@ def main():
         ),
     )
 
-    # First, estimate the costs for each horizon.
-    cost_estimate_batch = T
-    cost_histories = []
-    for k in horizons:
-        mpc = MPCLTI(np.ones(k), buffer_length=0, learning_rate=0.0)
-        cost_history, _ = run(LTI_instance, k, mpc, T)
-        cost_histories.append(cost_history)
-
-    # Plot per-horizon costs.
-    step_losses = np.sum(cost_histories, axis=1) / cost_estimate_batch
+    # Plot the mean per-step cost of each MPC horizon with full trust.
     ax_cost.barh(np.arange(n_horizons), step_losses, **bar_kwargs)
     ax_cost.set(xlabel="mean per-step loss", ylabel="MPC horizon", **bar_axis_set)
     if 0.5 < np.amax(step_losses) < 1.0:
         ax_cost.set_xlim([0, 1])
 
-    # Next, run EXP3.
+    # Run EXP3.
     # TODO: Currently assuming the MPC contraction parameters are no larger
     # than those of the LQR-optimal linear controller - is this true?
     K = np.linalg.solve(R + B.T @ P @ B, B.T) @ P @ A
@@ -148,17 +141,9 @@ def main():
     exp3_batch = int(growth ** (2.0 / 3.0) * (T / (n_horizons * np.log(n_horizons))) ** (1.0 / 3.0))
     print(f"{rho = :.3}, {C = :.3f}, {T = }, {exp3_batch = }")
     assert exp3_batch < T // 2
-    rate = (growth * n_horizons * T ** 2) ** (-1.0 / 3.0) * np.log(n_horizons) ** (2.0 / 3.0)
-    selector = MPCHorizonSelector(max_horizon, T, batch=exp3_batch, learning_rate=rate)
-    for t in range(T):
-        x, context = LTI_instance.observe(max_horizon)
-        u = selector.decide_action(x, context)
-        _ = LTI_instance.step(u)
-    dis_cost_history, dis_whole_trajectory = LTI_instance.reset()
-
-    #plt.plot(whole_trajectory[0, :], whole_trajectory[1, :], label="Controller")
-    #plt.legend()
-    #plt.savefig("Plots/Trajectory_of_controller.jpg")
+    exp3_rate = (growth * n_horizons * T ** 2) ** (-1.0 / 3.0) * np.log(n_horizons) ** (2.0 / 3.0)
+    selector = MPCHorizonSelector(max_horizon, T, batch=exp3_batch, learning_rate=exp3_rate)
+    dis_cost_history, dis_whole_trajectory = run(LTI_instance, max_horizon, selector, T)
 
     # Plot the behavior of EXP3.
     n_batches = len(selector.arm_history)
@@ -184,8 +169,9 @@ def main():
 
     # Next, run the continuous algorithm.
     initial_param = np.zeros(max_horizon)
-    rate = 1e-4
-    MPC_instance = MPCLTI(initial_param=initial_param, buffer_length=GRAD_BUFFER_LENGTH, learning_rate=rate)
+    oco_rate = (1.0 - rho) ** (5.0 / 2) / np.sqrt(T)
+    oco_buffer = int(np.log(T) / (2.0 * np.log(1.0 / rho)) + 1)
+    MPC_instance = MPCLTI(initial_param=initial_param, buffer_length=oco_buffer, learning_rate=oco_rate)
     cts_cost_history, cts_whole_trajectory = run(LTI_instance, max_horizon, MPC_instance, T)
     param_history = np.stack(MPC_instance.param_history)
     opt_param = param_history[-1]
@@ -212,7 +198,7 @@ def main():
 
     # Continuous regret.
     print(f"optimal param was {opt_param}")
-    MPC_cts_opt = MPCLTI(initial_param=opt_param, buffer_length=GRAD_BUFFER_LENGTH, learning_rate=0.0)
+    MPC_cts_opt = MPCLTI(initial_param=opt_param, buffer_length=oco_buffer, learning_rate=0.0)
     cts_opt_cost_history, _ = run(LTI_instance, max_horizon, MPC_cts_opt, T)
     ax_cts.plot(np.cumsum(cts_cost_history - cts_opt_cost_history), color="black", label="continuous")
     ax_cts.legend(loc="lower right")
