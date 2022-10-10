@@ -44,6 +44,9 @@ def run(lti, horizon, controller, T):
 
 def main():
 
+    print("-" * 60)
+    print("Comparing discrete vs. continuous MPC trust optimization.")
+
     T = 100000
 
     # These parameters all affect the costs of the different MPC horizons.
@@ -84,7 +87,7 @@ def main():
 
     # Generate the true disturbances and the random variables we'll use to
     # generate noisy predictions.
-    np.random.seed(1)
+    np.random.seed(0)
     ws = W_MAG * np.random.uniform(-1, 1, size=(n, T))
     es = E_MAG * np.random.uniform(-1, 1, size=(n, T))
 
@@ -92,6 +95,7 @@ def main():
     LTI_instance = LinearTracking(A, B, Q, R, Qf=P, init_state=x_0, traj=target_trajectory, ws=ws, es=es)
 
     # First, estimate the costs for each horizon.
+    print("Computing costs of each MPC horizon with full trust...")
     cost_estimate_batch = T
     cost_histories = []
     for k in horizons:
@@ -131,15 +135,19 @@ def main():
     if 0.5 < np.amax(step_losses) < 1.0:
         ax_cost.set_xlim([0, 1])
 
-    # Run EXP3.
+
     # TODO: Currently assuming the MPC contraction parameters are no larger
     # than those of the LQR-optimal linear controller - is this true?
     K = np.linalg.solve(R + B.T @ P @ B, B.T) @ P @ A
     F = A - B @ K
     rho, C = contraction_properties(F)
+    print(f"Contraction properties: {rho = :.3}, {C = :.3f}")
+
+    # Run EXP3.
+    print("Running EXP3-based horizon selection...")
     growth = C / (1.0 - rho)
     exp3_batch = int(growth ** (2.0 / 3.0) * (T / (n_horizons * np.log(n_horizons))) ** (1.0 / 3.0))
-    print(f"{rho = :.3}, {C = :.3f}, {T = }, {exp3_batch = }")
+    print(f"EXP3: batch = {exp3_batch} (total time is {T})")
     assert exp3_batch < T // 2
     exp3_rate = (growth * n_horizons * T ** 2) ** (-1.0 / 3.0) * np.log(n_horizons) ** (2.0 / 3.0)
     selector = MPCHorizonSelector(max_horizon, T, batch=exp3_batch, learning_rate=exp3_rate)
@@ -151,7 +159,7 @@ def main():
     bins_h = np.concatenate([horizons, [max_horizon + 1]]) - 0.5
     bins_t = np.linspace(0, n_batches, 45)
     ax_trace.hist2d(range(n_batches), selector.arm_history, bins=(bins_t, bins_h), cmap="Greys")
-    ax_trace.set(xlabel="batch", yticks=horizons)
+    ax_trace.set(xlabel="EXP3 batch", yticks=horizons)
 
     counts = np.bincount(selector.arm_history)
     ax_hist.barh(horizons, counts, **bar_kwargs)
@@ -168,6 +176,7 @@ def main():
     fig_exp3.savefig("Plots/exp3_horizon_selection.pdf")
 
     # Next, run the continuous algorithm.
+    print("Running OCO-based trust parameter optimization...")
     initial_param = np.zeros(max_horizon)
     oco_rate = (1.0 - rho) ** (5.0 / 2) / np.sqrt(T)
     oco_buffer = int(np.log(T) / (2.0 * np.log(1.0 / rho)) + 1)
@@ -197,7 +206,8 @@ def main():
     ax_dis.set(xlabel="time", xticks=time_ticks, ylabel="regret")
 
     # Continuous regret.
-    print(f"optimal param was {opt_param}")
+    with np.printoptions(precision=3):
+        print(f"optimal trust parameters: {opt_param}")
     MPC_cts_opt = MPCLTI(initial_param=opt_param, buffer_length=oco_buffer, learning_rate=0.0)
     cts_opt_cost_history, _ = run(LTI_instance, max_horizon, MPC_cts_opt, T)
     ax_cts.plot(np.cumsum(cts_cost_history - cts_opt_cost_history), color="black", label="continuous")
@@ -209,8 +219,9 @@ def main():
     # Show the advantage of using trust values instead of horizon tuning.
     dis_total = np.sum(dis_opt_cost_history)
     cts_total = np.sum(cts_opt_cost_history)
-    print(f"LQ cost: discrete = {dis_total:.1f}, continuous = {cts_total:.1f}")
+    print(f"LQ cost: optimal discrete = {dis_total:.1f}, optimal continuous = {cts_total:.1f}")
     print(f"         (ratio = {cts_total/dis_total:.2f})")
+    print("-" * 60)
 
 
 if __name__ == '__main__':
