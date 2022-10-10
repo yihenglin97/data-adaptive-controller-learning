@@ -1,3 +1,6 @@
+import os
+import multiprocessing
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -97,11 +100,13 @@ def main():
     # First, estimate the costs for each horizon.
     print("Computing costs of each MPC horizon with full trust...")
     cost_estimate_batch = T
-    cost_histories = []
-    for k in horizons:
-        mpc = MPCLTI(np.ones(k), buffer_length=0, learning_rate=0.0)
-        cost_history, _ = run(LTI_instance, k, mpc, T)
-        cost_histories.append(cost_history)
+    args = [
+        (LTI_instance, k, MPCLTI(np.ones(k), 0, 0.0), T)
+        for k in horizons
+    ]
+    pool = multiprocessing.Pool(os.cpu_count() - 1)
+    outputs = pool.starmap(run, args)
+    cost_histories = [out[0] for out in outputs]
 
     # Rescale the costs for EXP3.
     cost_histories = np.array(cost_histories)

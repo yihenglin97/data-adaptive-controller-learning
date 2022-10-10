@@ -39,9 +39,10 @@ class LinearTracking(Environment.Environment):
         # construct the predicted disturbances sequence
         pred_horizon = min(self.T - t, k)
         if self.E is not None:
-            predicted_disturbances = np.copy(self.W[:, t:t + pred_horizon])
-            for i in range(pred_horizon):
-                predicted_disturbances[:, i:] += np.tile(self.E[:, t + i:t + i + 1], pred_horizon - i)
+            predicted_disturbances = (
+                self.W[:, t:t + pred_horizon] +
+                np.cumsum(self.E[:, t:t+pred_horizon], axis=1)
+            )
         else:
             assert self.What is not None
             predicted_disturbances = self.What[:, t:t + pred_horizon]
