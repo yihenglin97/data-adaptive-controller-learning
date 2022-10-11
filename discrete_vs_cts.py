@@ -69,8 +69,8 @@ def main():
         [DT * np.eye(2)],
     ])
     Q = np.block([
-        [DT * np.eye(2), zero2x2],
-        [       zero2x2, zero2x2],
+        [DT * np.eye(2),              zero2x2],
+        [       zero2x2, 0.1 * DT * np.eye(2)],
     ])
     R = R_SCALE * DT * np.eye(2)
     n, m = B.shape
@@ -137,8 +137,6 @@ def main():
     # Plot the mean per-step cost of each MPC horizon with full trust.
     ax_cost.barh(np.arange(n_horizons), step_losses, **bar_kwargs)
     ax_cost.set(xlabel="mean per-step loss", ylabel="MPC horizon", **bar_axis_set)
-    if 0.5 < np.amax(step_losses) < 1.0:
-        ax_cost.set_xlim([0, 1])
 
 
     # TODO: Currently assuming the MPC contraction parameters are no larger
