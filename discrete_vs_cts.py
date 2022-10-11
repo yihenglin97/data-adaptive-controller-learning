@@ -4,7 +4,9 @@ import multiprocessing
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from scipy.linalg import solve_discrete_are
+import seaborn as sns
 
 from discrete import MPCHorizonSelector
 from LinearTracking import LinearTracking
@@ -50,7 +52,7 @@ def main():
     print("-" * 60)
     print("Comparing discrete vs. continuous MPC trust optimization.")
 
-    T = 100000
+    T = 1000000
 
     # These parameters all affect the costs of the different MPC horizons.
     DT = 0.1
@@ -147,13 +149,33 @@ def main():
     print(f"Contraction properties: {rho = :.3}, {C = :.3f}")
 
     # Run EXP3.
-    print("Running EXP3-based horizon selection...")
     growth = C / (1.0 - rho)
-    exp3_batch = int(growth ** (2.0 / 3.0) * (T / (n_horizons * np.log(n_horizons))) ** (1.0 / 3.0))
+    exp3_batch = int(2 * growth ** (2.0 / 3.0) * (T / (n_horizons * np.log(n_horizons))) ** (1.0 / 3.0))
+
+
+    n_batches = T // exp3_batch
+    batches = cost_histories[:, :n_batches*exp3_batch].reshape((n_horizons, n_batches, exp3_batch))
+    batch_sums = np.sum(batches, axis=-1)
+    dfs = []
+    for k, sums in enumerate(batch_sums):
+        assert len(sums.shape) == 1
+        dfs.append(pd.DataFrame({"cost": sums, "horizon": k}))
+    df = pd.concat(dfs, ignore_index=True)
+    grid = sns.catplot(
+        data=df,
+        kind="violin",
+        x="horizon",
+        y="cost",
+    )
+    grid.savefig("Plots/batch_sum_hists.pdf")
+    print("saved batch sum hists")
+
+
     print(f"EXP3: batch = {exp3_batch} (total time is {T})")
     assert exp3_batch < T // 2
     exp3_rate = (growth * n_horizons * T ** 2) ** (-1.0 / 3.0) * np.log(n_horizons) ** (2.0 / 3.0)
     selector = MPCHorizonSelector(max_horizon, T, batch=exp3_batch, learning_rate=exp3_rate)
+    print("Running EXP3-based horizon selection...")
     dis_cost_history, dis_whole_trajectory = run(LTI_instance, max_horizon, selector, T)
 
     # Plot the behavior of EXP3.
