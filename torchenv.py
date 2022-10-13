@@ -14,15 +14,17 @@ class TorchEnv:
         self.x_history = [self.x.detach().numpy()]
         self.cost_history = []
 
-    def change_dynamics(self, g):
-        self.dynamics = g
+    def change_dynamics(self, dynamics):
+        self.dynamics = dynamics
+
+    def change_cost(self, cost):
+        self.cost = cost
 
     def observe(self):
         return self.x.detach().numpy()
 
     # return the available gradients (f_t/x_t, f_t/u_t, g_t/x_t, g_t/u_t)
     def step(self, u):
-        u = torch.tensor(u)
         stage_cost = float(self.cost(self.x, u).detach())
         self.cost_history.append(stage_cost)
 

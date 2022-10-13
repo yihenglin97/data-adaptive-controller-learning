@@ -5,8 +5,9 @@ import torch
 from GAPS import GAPSEstimator
 from torchenv import TorchEnv
 
+# z points down
 
-_GRAV = torch.Tensor([0, 0, -9.81])
+_GRAV = torch.Tensor([0, 0, 9.81])
 
 
 def _hat(w):
@@ -47,10 +48,6 @@ def unpack(x):
     return p, v, R, w
 
 
-def pack(p, v, R, w):
-    return torch.cat([p, v, R, w])
-
-
 def make_quadrotor_dynamics(mass, inertia, dt):
     inertia = torch.tensor(inertia)
     def quadrotor_dynamics(x, u):
@@ -62,39 +59,83 @@ def make_quadrotor_dynamics(mass, inertia, dt):
         moment = thrust_moment[1:]
 
         dp = v
-        dv = _GRAV + (thrust / mass) * R[:, 2]
-        dR = R @ _hat(w)
+        dv = _GRAV - (thrust / mass) * R[:, 2]
         dw = torch.diag(1.0 / inertia) @ (moment - torch.linalg.cross(w, torch.diag(inertia) @ w))
+
+        # Rodrigues
+        if False:
+            wnorm = torch.linalg.norm(w)
+            if wnorm > 1e-6:
+                #w2 = R @ w
+                #K = _hat(w2 / wnorm)
+                K = R @ _hat(w / wnorm)
+                angle = dt * wnorm
+                Rstep = torch.eye(3) + torch.sin(angle) * K + (1.0 - torch.cos(angle)) * K @ K
+                Rnext = Rstep @ R
+            else:
+                Rnext = R
+        else:
+            dR = R @ _hat(w)
+            Rnext = R + dt * dR
 
         return torch.cat([
             p + dt * dp,
             v + dt * dv,
-            (R + dt * dR).flatten(),
+            Rnext.flatten(),
             w + dt * dw,
         ])
     return quadrotor_dynamics
 
+
+def _normalize(x):
+    return x / torch.linalg.norm(x)
+
+
 def make_quadrotor_control(mass, inertia):
-    inertia = torch.tensor(inertia)
-    def quadrotor_control(x, theta):
+    inertia = torch.tensor(inertia, requires_grad=False)
+    def quadrotor_control(x, pdes, vdes, theta):
         kp, kv, kR, kw = theta
         p, v, R, w = unpack(x)
-        eR = 0.5 * _vee(R - R.T)
-        force = -(
-            kp * p
-            + kv * v
+        # We set feedforward linear and angular accelerations to 0 - let the
+        # controller handle it.
+        ep = p - pdes
+        ev = v - vdes
+        forcevec = -(
+            kp * ep
+            + kv * ev
             + mass * _GRAV
         )
-        thrust = torch.dot(force, R[:, 2])
+        R3 = -_normalize(forcevec)
+        R2 = _normalize(torch.linalg.cross(R3, torch.tensor([1, 0, 0], dtype=torch.double)))
+        R1 = torch.linalg.cross(R2, R3)
+        assert np.isclose(torch.linalg.norm(R1).detach().numpy(), 1.0, atol=1e-6)
+        Rd = torch.column_stack([R1, R2, R3])
+        wd = torch.zeros(3, dtype=torch.double)  # TODO: correct?
+
+        eR = 0.5 * _vee(Rd.T @ R - R.T @ Rd)
+        ew = w - R.T @ (Rd @ wd)
+        thrust = -torch.dot(forcevec, R[:, 2])
         moment = (
-            -kR * eR
-            - kw * w
+            - kR * eR
+            - kw * ew
             # Inertia is diagonal, so matrix mult = elementwise mult
             + torch.linalg.cross(w, inertia * w)
-            # Simplified when desired angular velocity is zero.
+            - inertia * torch.linalg.cross(w, R.T @ (Rd @ wd))
         )
         return _THRUST_MOMENT_TO_FORCES @ torch.cat([thrust[None], moment])
     return quadrotor_control
+
+
+def make_quadrotor_cost(pdes, vdes):
+    def cost(x, u):
+        p, v, R, w = unpack(x)
+        # TODO: R, w error costs?
+        return (
+            torch.sum((p - pdes) ** 2)
+            #+ 0.01 * torch.sum((v - vdes) ** 2)
+            + 0.0001 * torch.sum(u ** 2)
+        )
+    return cost
 
 
 _TRIANGLE_INEQUALITY_CHECK = np.array([
@@ -121,43 +162,45 @@ _IDENTITY_STATE = np.concatenate([
 
 def main():
     npr = np.random.default_rng(seed=0)
-    T = 20000
     n_packages = 20
+    T = n_packages * 1000
     trip_lengths = 2 ** npr.uniform(-1, 1, size=n_packages)
     trip_lengths *= T / np.sum(trip_lengths)
-    trip_lengths = trip_lengths.astype(np.int)
-
-    inertia_scales = np.stack([_random_inertia(npr, 2.0) for _ in range(n_packages)])
-    inertia_scales[0] = np.ones(3)
-    inertias = inertia_scales * nominal_inertia[None, :]
+    trip_lengths = trip_lengths.astype(int)
 
     mass_scales = 2 ** npr.uniform(-1, 1, size=n_packages)
     mass_scales[0] = 1.0
     masses = mass_scales * nominal_mass
 
-    dt = 1.0 / 50
+    inertia_scales = np.stack([_random_inertia(npr, 2.0) for _ in range(n_packages)])
+    inertia_scales[0] = np.ones(3)
+    inertias = mass_scales[:, None] * inertia_scales * nominal_inertia[None, :]
 
-    estimator = GAPSEstimator(buffer_length=100)
+    dt = 1.0 / 200
+
+    # Compute desired trajectory.
+    circle_period = 10.0 # seconds
+    circle_radius = 1.0
+    omega = 2.0 * np.pi / circle_period
+    t = dt * np.arange(T)
+    pdes = circle_radius * np.stack([np.cos(omega * t) - 1, np.sin(omega * t), np.zeros(T)]).T
+    vdes = circle_radius * np.stack([-omega * np.sin(omega * t), omega * np.cos(omega * t), np.zeros(T)]).T
+
+    estimator = GAPSEstimator(buffer_length=1000)
 
     dynamics = make_quadrotor_dynamics(masses[0], inertias[0], dt)
-    def cost(x, u):
-        # TODO: per-state costs
-        p, v, R, w = unpack(x)
-        return (
-            torch.sum(p[:3] ** 2)
-            + 0.01 * torch.sum(v[:3] ** 2)
-            + 0.0001 * torch.sum(u ** 2)
-        )
+    cost = make_quadrotor_cost(pdes=np.zeros(3), vdes=np.zeros(3))
 
     env = TorchEnv(dynamics, cost, _IDENTITY_STATE)
 
     param_nominal = np.array([16.0, 5.6, 8.81, 2.54])
     param = param_nominal.copy()
     param_history = [param]
-    eta = 1e0
+    eta = 1e-1
 
-    z_history = []
+    p_history = []
 
+    itot = 0
     for i in range(n_packages):
         mass = masses[i]
         inertia = inertias[i]
@@ -166,38 +209,62 @@ def main():
         controller = make_quadrotor_control(nominal_mass, nominal_inertia)
         for t in range(trip_lengths[i]):
             x = env.observe()
-            z_history.append(float(x[2]))
-            u = controller(torch.tensor(x), torch.tensor(param))
-            dudx, dudtheta = torch.autograd.functional.jacobian(
+            p, v, R, w = unpack(x)
+            U, E, VT = np.linalg.svd(R)
+            R = U @ VT
+            x = np.concatenate([p, v, R.flat, w])
+
+            p_history.append(x[:3])
+            pdesi = torch.tensor(pdes[itot], requires_grad=False)
+            vdesi = torch.tensor(vdes[itot], requires_grad=False)
+            cost = make_quadrotor_cost(pdesi, vdesi)
+            env.change_cost(cost)
+            u = controller(torch.tensor(x), pdesi, vdesi, torch.tensor(param))
+            dudx, _, _, dudtheta = torch.autograd.functional.jacobian(
                 controller,
-                (torch.tensor(x), torch.tensor(param)),
+                (torch.tensor(x), pdesi, vdesi, torch.tensor(param)),
                 vectorize=True,
             )
             dudx = dudx.detach().numpy()
             dudtheta = dudtheta.detach().numpy()
             estimator.add_partial_u(dudx, dudtheta)
-            print(f"{u = }")
             derivatives = env.step(u)
+
+            # Gradient step
             G = estimator.update(*derivatives)
-            print(f"{G = }")
-            # TODO: projection!
             param = param - eta * G
+
+            # Projection
+            param[param < 0] = 0
+            param = np.minimum(param, 10 * param_nominal)
+
             param_history.append(param)
+            itot += 1
+
+    p_history = np.stack(p_history)
 
     fig_kwargs = dict(figsize=(12, 4), constrained_layout=True)
+
     fig_z, ax_z = plt.subplots(1, 1, **fig_kwargs)
     #ax.semilogy(-np.array(z_history) - 1)
-    ax_z.plot(z_history)
+    ax_z.plot(p_history[:, 2])
     ax_z.set(xlabel="step", ylabel="z")
+
+    fig_xy, ax_xy = plt.subplots(1, 1, constrained_layout=True)
+    #ax.semilogy(-np.array(z_history) - 1)
+    ax_xy.plot(pdes[:, 0], pdes[:, 1], label="desired")
+    ax_xy.plot(p_history[:, 0], p_history[:, 1], label="actual")
+    ax_xy.legend()
+    ax_xy.set(xlabel="x", ylabel="y")
 
     params = np.stack(param_history).T
     params /= param_nominal[:, None]
     hkp, hkv, hkR, hkw = params
     fig, ax = plt.subplots(1, 1, **fig_kwargs)
-    ax.plot(hkp, label="kp")
-    ax.plot(hkv, label="kv")
-    ax.plot(hkR, label="kR")
-    ax.plot(hkw, label="kw")
+    ax.semilogy(hkp, label="kp")
+    ax.semilogy(hkv, label="kv")
+    ax.semilogy(hkR, label="kR")
+    ax.semilogy(hkw, label="kw")
     ax.set(xlabel="step", ylabel="vs. nominal")
 
     for ax in (ax, ax_z):
@@ -209,6 +276,7 @@ def main():
 
     fig.savefig("pid_traces.pdf")
     fig_z.savefig("quadrotor_z.pdf")
+    fig_xy.savefig("quadrotor_xy.pdf")
 
 
 if __name__ == "__main__":
