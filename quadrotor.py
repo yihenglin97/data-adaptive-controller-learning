@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -60,6 +59,7 @@ def make_quadrotor_dynamics(mass, inertia, dt):
 
         dp = v
         dv = _GRAV - (thrust / mass) * R[:, 2]
+        dv -= 0.02 * v  # Damping.
         dw = torch.diag(1.0 / inertia) @ (moment - torch.linalg.cross(w, torch.diag(inertia) @ w))
 
         # Rodrigues
@@ -122,7 +122,9 @@ def make_quadrotor_control(mass, inertia):
             + torch.linalg.cross(w, inertia * w)
             - inertia * torch.linalg.cross(w, R.T @ (Rd @ wd))
         )
-        return _THRUST_MOMENT_TO_FORCES @ torch.cat([thrust[None], moment])
+        forces = _THRUST_MOMENT_TO_FORCES @ torch.cat([thrust[None], moment])
+        forces[forces < 0] = 0
+        return forces
     return quadrotor_control
 
 
@@ -133,7 +135,7 @@ def make_quadrotor_cost(pdes, vdes):
         return (
             torch.sum((p - pdes) ** 2)
             #+ 0.01 * torch.sum((v - vdes) ** 2)
-            + 0.0001 * torch.sum(u ** 2)
+            + 1e-2 * torch.sum(u ** 2)
         )
     return cost
 
@@ -159,33 +161,63 @@ _IDENTITY_STATE = np.concatenate([
     np.zeros(3),
 ])
 
-
-def main():
+def run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, param):
+    n_packages = len(trip_lengths)
     npr = np.random.default_rng(seed=0)
-    n_packages = 20
-    T = n_packages * 1000
-    trip_lengths = 2 ** npr.uniform(-1, 1, size=n_packages)
-    trip_lengths *= T / np.sum(trip_lengths)
-    trip_lengths = trip_lengths.astype(int)
 
-    mass_scales = 2 ** npr.uniform(-1, 1, size=n_packages)
-    mass_scales[0] = 1.0
-    masses = mass_scales * nominal_mass
+    dynamics = make_quadrotor_dynamics(masses[0], inertias[0], dt)
+    cost = make_quadrotor_cost(pdes=np.zeros(3), vdes=np.zeros(3))
 
-    inertia_scales = np.stack([_random_inertia(npr, 2.0) for _ in range(n_packages)])
-    inertia_scales[0] = np.ones(3)
-    inertias = mass_scales[:, None] * inertia_scales * nominal_inertia[None, :]
+    p_history = []
+    cost_history = []
+    x = torch.tensor(_IDENTITY_STATE)
 
-    dt = 1.0 / 200
+    itot = 0
+    for i in range(n_packages):
+        mass = masses[i]
+        inertia = inertias[i]
+        dynamics = make_quadrotor_dynamics(mass, inertia, dt)
 
-    # Compute desired trajectory.
-    circle_period = 10.0 # seconds
-    circle_radius = 1.0
-    omega = 2.0 * np.pi / circle_period
-    t = dt * np.arange(T)
-    pdes = circle_radius * np.stack([np.cos(omega * t) - 1, np.sin(omega * t), np.zeros(T)]).T
-    vdes = circle_radius * np.stack([-omega * np.sin(omega * t), omega * np.cos(omega * t), np.zeros(T)]).T
+        mass_estimate = mass * (1.2 ** npr.uniform(-1, 1))
+        inertia_estimate = (mass_estimate / nominal_mass) * nominal_inertia
+        controller = make_quadrotor_control(mass_estimate, inertia_estimate)
 
+        for t in range(trip_lengths[i]):
+            p, v, R, w = unpack(x)
+            U, E, VT = np.linalg.svd(R)
+            R = U @ VT
+            w += dt * 0.1 * np.random.normal(size=3)
+            x = np.concatenate([p, v, R.flat, w])
+
+            pdesi = torch.tensor(pdes[itot], requires_grad=False)
+            vdesi = torch.tensor(vdes[itot], requires_grad=False)
+            cost = make_quadrotor_cost(pdesi, vdesi)
+
+            p_history.append(x[:3])
+
+            u = controller(torch.tensor(x), pdesi, vdesi, torch.tensor(param))
+            x = dynamics(torch.tensor(x), u).detach().numpy()
+
+            cost_history.append(cost(torch.tensor(x), u).detach().numpy())
+
+            itot += 1
+
+    cost_history = np.stack(cost_history).squeeze()
+    p_history = np.stack(p_history)
+
+    return dict(
+        trip_lengths=trip_lengths,
+        pos_desired=pdes,
+        pos_history=p_history,
+        param_nominal=param,
+        cost_history=cost_history
+    )
+
+
+def run_online(dt, trip_lengths, masses, inertias, pdes, vdes):
+
+    npr = np.random.default_rng(seed=0)
+    n_packages = len(trip_lengths)
     estimator = GAPSEstimator(buffer_length=1000)
 
     dynamics = make_quadrotor_dynamics(masses[0], inertias[0], dt)
@@ -206,15 +238,20 @@ def main():
         inertia = inertias[i]
         dynamics = make_quadrotor_dynamics(mass, inertia, dt)
         env.change_dynamics(dynamics)
-        controller = make_quadrotor_control(nominal_mass, nominal_inertia)
+
+        mass_estimate = mass * (1.2 ** npr.uniform(-1, 1))
+        inertia_estimate = (mass_estimate / nominal_mass) * nominal_inertia
+        controller = make_quadrotor_control(mass_estimate, inertia_estimate)
         for t in range(trip_lengths[i]):
             x = env.observe()
             p, v, R, w = unpack(x)
             U, E, VT = np.linalg.svd(R)
             R = U @ VT
+            w += dt * 0.1 * np.random.normal(size=3)
             x = np.concatenate([p, v, R.flat, w])
 
             p_history.append(x[:3])
+
             pdesi = torch.tensor(pdes[itot], requires_grad=False)
             vdesi = torch.tensor(vdes[itot], requires_grad=False)
             cost = make_quadrotor_cost(pdesi, vdesi)
@@ -233,6 +270,7 @@ def main():
             # Gradient step
             G = estimator.update(*derivatives)
             param = param - eta * G
+            print(f"{G = }")
 
             # Projection
             param[param < 0] = 0
@@ -241,42 +279,64 @@ def main():
             param_history.append(param)
             itot += 1
 
+    cost_history = np.array(env.cost_history)
     p_history = np.stack(p_history)
 
-    fig_kwargs = dict(figsize=(12, 4), constrained_layout=True)
+    return dict(
+        trip_lengths=trip_lengths,
+        pos_desired=pdes,
+        pos_history=p_history,
+        param_history=param_history,
+        param_nominal=param_nominal,
+        cost_history=cost_history
+    )
 
-    fig_z, ax_z = plt.subplots(1, 1, **fig_kwargs)
-    #ax.semilogy(-np.array(z_history) - 1)
-    ax_z.plot(p_history[:, 2])
-    ax_z.set(xlabel="step", ylabel="z")
+def dict_key_map(d, f):
+    return {f(k) : v for k, v in d.items()}
 
-    fig_xy, ax_xy = plt.subplots(1, 1, constrained_layout=True)
-    #ax.semilogy(-np.array(z_history) - 1)
-    ax_xy.plot(pdes[:, 0], pdes[:, 1], label="desired")
-    ax_xy.plot(p_history[:, 0], p_history[:, 1], label="actual")
-    ax_xy.legend()
-    ax_xy.set(xlabel="x", ylabel="y")
+def dict_key_prepend(d, s):
+    return dict_key_map(d, lambda k: s + k)
 
-    params = np.stack(param_history).T
-    params /= param_nominal[:, None]
-    hkp, hkv, hkR, hkw = params
-    fig, ax = plt.subplots(1, 1, **fig_kwargs)
-    ax.semilogy(hkp, label="kp")
-    ax.semilogy(hkv, label="kv")
-    ax.semilogy(hkR, label="kR")
-    ax.semilogy(hkw, label="kw")
-    ax.set(xlabel="step", ylabel="vs. nominal")
+def main():
+    npr = np.random.default_rng(seed=0)
+    n_packages = 20
+    T = n_packages * 1000
+    trip_lengths = 2 ** npr.uniform(-1, 1, size=n_packages)
+    trip_lengths *= T / np.sum(trip_lengths)
+    trip_lengths = trip_lengths.astype(int)
 
-    for ax in (ax, ax_z):
-        changes = np.cumsum(trip_lengths)
-        ax.axvline(changes[0], label="new package", color="black", linewidth=1.0)
-        for t in changes[1:]:
-            ax.axvline(t, color="black", linewidth=1.0)
-        ax.legend()
+    mass_scales = 2 ** npr.uniform(-1, 1, size=n_packages)
+    mass_scales[0] = 1.0
+    masses = mass_scales * nominal_mass
 
-    fig.savefig("pid_traces.pdf")
-    fig_z.savefig("quadrotor_z.pdf")
-    fig_xy.savefig("quadrotor_xy.pdf")
+    inertia_scales = np.stack([_random_inertia(npr, 4.0) for _ in range(n_packages)])
+    inertia_scales[0] = np.ones(3)
+    inertias = mass_scales[:, None] * inertia_scales * nominal_inertia[None, :]
+
+    dt = 1.0 / 200
+
+    # Compute desired trajectory.
+    circle_period = 10.0 # seconds
+    circle_radius = 2.0
+    omega = 2.0 * np.pi / circle_period
+    t = dt * np.arange(T)
+    pdes = circle_radius * np.stack([np.cos(omega * t) - 1, np.sin(omega * t), np.zeros(T)]).T
+    vdes = circle_radius * np.stack([-omega * np.sin(omega * t), omega * np.cos(omega * t), np.zeros(T)]).T
+
+    online_result = run_online(dt, trip_lengths, masses, inertias, pdes, vdes)
+
+    last_param = online_result["param_history"][-1]
+    offline_result = run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, last_param)
+
+    online_cost = np.sum(online_result["cost_history"])
+    offline_cost = np.sum(offline_result["cost_history"])
+    print(f"{online_cost = }, {offline_cost = }")
+
+    all_results = {
+        **dict_key_prepend(online_result, "online_"),
+        **dict_key_prepend(offline_result, "offline_"),
+    }
+    np.savez("quadrotor_data.npz", **all_results)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 # Don't commit the output
 Plots/
+*.pdf
+*.npz
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
