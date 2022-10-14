@@ -1,5 +1,7 @@
 import argparse
 import multiprocessing
+import os
+
 import numpy as np
 import torch
 
@@ -298,9 +300,11 @@ def dict_key_prepend(d, s):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("packages", type=int, default=5)
+    parser.add_argument("--packages", type=int, default=5)
+    parser.add_argument("--rand", type=int, default=20)
     args = parser.parse_args()
     n_packages = args.packages
+    n_rand = args.rand
 
     npr = np.random.default_rng(seed=0)
     T = n_packages * 1000
@@ -331,13 +335,24 @@ def main():
 
     online_result = run_online(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes)
 
-    last_param = online_result["param_history"][-1]
-    offline_result = run_fixed(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes, last_param)
+    param_history = online_result["param_history"]
+    param_maxes = 2.0 * np.amax(param_history, axis=0)
+    param_mins = 0.5 * np.amin(param_history, axis=0)
+    random_params = np.stack([npr.uniform(param_mins, param_maxes) for _ in range(n_rand)])
+    assert random_params.shape == (n_rand, param_history[-1].size)
+    pool = multiprocessing.Pool(os.cpu_count() - 1)
+    args = [
+        (dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes, p)
+        for p in random_params
+    ]
+    offline_results = pool.starmap(run_fixed, args)
+    total_costs = [np.sum(r["cost_history"]) for r in offline_results]
+    best = np.argmin(total_costs)
 
-    online_cost = np.sum(online_result["cost_history"])
-    offline_cost = np.sum(offline_result["cost_history"])
-    print(f"{online_cost = }, {offline_cost = }")
+    print(f"online's last param: {param_history[-1]}")
+    print(f"best random param: {random_params[best]}")
 
+    offline_result = offline_results[best]
     all_results = {
         **dict_key_prepend(online_result, "online_"),
         **dict_key_prepend(offline_result, "offline_"),
