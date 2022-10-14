@@ -2,16 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def main2():
-    npz = np.load("quadrotor_data.npz")
-    online = npz["online_cost_history"]
-    offline = npz["offline_cost_history"]
-    regret = np.cumsum(online - offline)
-    fig, ax = plt.subplots(1, 1)
-    ax.plot(regret)
-    fig.savefig("quadrotor_regret.pdf")
-
-
 def main():
 
     npz = np.load("quadrotor_data.npz")
@@ -51,7 +41,7 @@ def main():
     #ax.semilogy(-np.array(z_history) - 1)
     end_desired = int(period / dt)
     ax_xy.plot(pos_desired[:end_desired, 0], pos_desired[:end_desired, 1], color="black", linestyle="--", linewidth=1.0, label="desired")
-    ax_xy.plot(pos_history[:, 0], pos_history[:, 1], color="black", alpha=0.5, label="actual")
+    ax_xy.plot(pos_history[:, 0], pos_history[:, 1], color="black", alpha=0.25, label="actual")
     ax_xy.legend(loc="upper left")
     ax_xy.axis("equal")
     ax_xy.set(xlabel="x", ylabel="y")
@@ -68,11 +58,20 @@ def main():
     ax_params.legend()
     ax_params.set(xlabel="time (sec)", ylabel="param/nominal (ratio)")
 
-    fig_params.savefig("pid_traces.pdf")
+    fig_params.savefig("quadrotor_pid_traces.pdf")
     fig_z.savefig("quadrotor_z.pdf")
     fig_xy.savefig("quadrotor_xy.pdf")
 
 
+    online = npz["online_cost_history"]
+    offline = npz["offline_cost_history"]
+    regret = np.cumsum(online - offline)
+    fig_regret, ax_regret = plt.subplots(1, 1, figsize=(4, 3), constrained_layout=True)
+    ax_regret.plot(t[:-1], regret)
+    ax_regret.set(xlabel="time", ylabel="approx. regret")
+    fig_regret.savefig("quadrotor_regret.pdf")
+
+
+
 if __name__ == "__main__":
     main()
-    main2()
