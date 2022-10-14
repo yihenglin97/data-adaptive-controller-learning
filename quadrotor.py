@@ -110,9 +110,11 @@ def make_quadrotor_control(mass, inertia):
             + mass * _GRAV
         )
         R3 = -_normalize(forcevec)
+        x_des = torch.tensor([1, 0, 0], dtype=torch.double)
+        if torch.dot(R3, x_des) > 0.95:
+            x_des = torch.tensor([0, 0, 1], dtype=torch.double)
         R2 = _normalize(torch.linalg.cross(R3, torch.tensor([1, 0, 0], dtype=torch.double)))
         R1 = torch.linalg.cross(R2, R3)
-        assert np.isclose(torch.linalg.norm(R1).detach().numpy(), 1.0, atol=1e-6)
         Rd = torch.column_stack([R1, R2, R3])
         wd = torch.zeros(3, dtype=torch.double)  # TODO: correct?
 
@@ -217,10 +219,18 @@ def run_fixed(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estima
     )
 
 
+def run_fixed_checked(*args, **kwargs):
+    try:
+        return run_fixed(*args, **kwargs)
+    except:
+        return dict(cost_history = [np.inf])
+
+
 def run_online(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes):
 
     n_packages = len(trip_lengths)
-    estimator = GAPSEstimator(buffer_length=1000)
+    buf_len = 2000
+    estimator = GAPSEstimator(buffer_length=buf_len)
 
     dynamics = make_quadrotor_dynamics(masses[0], inertias[0], dt)
     cost = make_quadrotor_cost(pdes=np.zeros(3), vdes=np.zeros(3))
@@ -230,7 +240,7 @@ def run_online(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estim
     param_nominal = np.array([16.0, 5.6, 8.81, 2.54])
     param = param_nominal.copy()
     param_history = [param]
-    eta = 1e-1
+    eta = 2e-1
 
     p_history = []
 
@@ -345,8 +355,9 @@ def main():
         (dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes, p)
         for p in random_params
     ]
-    offline_results = pool.starmap(run_fixed, args)
+    offline_results = pool.starmap(run_fixed_checked, args)
     total_costs = [np.sum(r["cost_history"]) for r in offline_results]
+    print(f"{np.sum(np.isnan(total_costs))} / {n_rand} numerically unstable.")
     best = np.argmin(total_costs)
 
     print(f"online's last param: {param_history[-1]}")
