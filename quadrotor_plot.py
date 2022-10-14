@@ -7,19 +7,20 @@ def main2():
     online = npz["online_cost_history"]
     offline = npz["offline_cost_history"]
     regret = np.cumsum(online - offline)
-    plt.plot(regret)
-    plt.savefig("quadrotor_regret.pdf")
+    fig, ax = plt.subplots(1, 1)
+    ax.plot(regret)
+    fig.savefig("quadrotor_regret.pdf")
 
 
 def main():
 
     npz = np.load("quadrotor_data.npz")
 
-    trip_lengths = npz["trip_lengths"]
-    pos_history = npz["pos_history"]
-    pos_desired = npz["pos_desired"]
-    param_history = npz["param_history"]
-    param_nominal = npz["param_nominal"]
+    trip_lengths = npz["online_trip_lengths"]
+    pos_history = npz["online_pos_history"]
+    pos_desired = npz["online_pos_desired"]
+    param_history = npz["online_param_history"]
+    param_nominal = npz["online_param_nominal"]
 
     n_packages = len(trip_lengths)
 
@@ -62,4 +63,5 @@ def main():
 
 
 if __name__ == "__main__":
+    main()
     main2()

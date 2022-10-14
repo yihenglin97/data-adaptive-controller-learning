@@ -1,3 +1,5 @@
+import argparse
+import multiprocessing
 import numpy as np
 import torch
 
@@ -161,9 +163,9 @@ _IDENTITY_STATE = np.concatenate([
     np.zeros(3),
 ])
 
-def run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, param):
+
+def run_fixed(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes, param):
     n_packages = len(trip_lengths)
-    npr = np.random.default_rng(seed=0)
 
     dynamics = make_quadrotor_dynamics(masses[0], inertias[0], dt)
     cost = make_quadrotor_cost(pdes=np.zeros(3), vdes=np.zeros(3))
@@ -178,15 +180,14 @@ def run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, param):
         inertia = inertias[i]
         dynamics = make_quadrotor_dynamics(mass, inertia, dt)
 
-        mass_estimate = mass * (1.2 ** npr.uniform(-1, 1))
-        inertia_estimate = (mass_estimate / nominal_mass) * nominal_inertia
+        mass_estimate = mass_estimates[i]
+        inertia_estimate = inertia_estimates[i]
         controller = make_quadrotor_control(mass_estimate, inertia_estimate)
 
         for t in range(trip_lengths[i]):
             p, v, R, w = unpack(x)
             U, E, VT = np.linalg.svd(R)
             R = U @ VT
-            w += dt * 0.1 * np.random.normal(size=3)
             x = np.concatenate([p, v, R.flat, w])
 
             pdesi = torch.tensor(pdes[itot], requires_grad=False)
@@ -214,9 +215,8 @@ def run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, param):
     )
 
 
-def run_online(dt, trip_lengths, masses, inertias, pdes, vdes):
+def run_online(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes):
 
-    npr = np.random.default_rng(seed=0)
     n_packages = len(trip_lengths)
     estimator = GAPSEstimator(buffer_length=1000)
 
@@ -239,7 +239,7 @@ def run_online(dt, trip_lengths, masses, inertias, pdes, vdes):
         dynamics = make_quadrotor_dynamics(mass, inertia, dt)
         env.change_dynamics(dynamics)
 
-        mass_estimate = mass * (1.2 ** npr.uniform(-1, 1))
+        mass_estimate = mass_estimates[i]
         inertia_estimate = (mass_estimate / nominal_mass) * nominal_inertia
         controller = make_quadrotor_control(mass_estimate, inertia_estimate)
         for t in range(trip_lengths[i]):
@@ -247,7 +247,6 @@ def run_online(dt, trip_lengths, masses, inertias, pdes, vdes):
             p, v, R, w = unpack(x)
             U, E, VT = np.linalg.svd(R)
             R = U @ VT
-            w += dt * 0.1 * np.random.normal(size=3)
             x = np.concatenate([p, v, R.flat, w])
 
             p_history.append(x[:3])
@@ -298,8 +297,12 @@ def dict_key_prepend(d, s):
     return dict_key_map(d, lambda k: s + k)
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("packages", type=int, default=5)
+    args = parser.parse_args()
+    n_packages = args.packages
+
     npr = np.random.default_rng(seed=0)
-    n_packages = 20
     T = n_packages * 1000
     trip_lengths = 2 ** npr.uniform(-1, 1, size=n_packages)
     trip_lengths *= T / np.sum(trip_lengths)
@@ -313,6 +316,9 @@ def main():
     inertia_scales[0] = np.ones(3)
     inertias = mass_scales[:, None] * inertia_scales * nominal_inertia[None, :]
 
+    mass_estimates = masses * (1.2 ** npr.uniform(-1, 1, size=n_packages))
+    inertia_estimates = (mass_estimates / nominal_mass)[:, None] * nominal_inertia[None, :]
+
     dt = 1.0 / 200
 
     # Compute desired trajectory.
@@ -323,10 +329,10 @@ def main():
     pdes = circle_radius * np.stack([np.cos(omega * t) - 1, np.sin(omega * t), np.zeros(T)]).T
     vdes = circle_radius * np.stack([-omega * np.sin(omega * t), omega * np.cos(omega * t), np.zeros(T)]).T
 
-    online_result = run_online(dt, trip_lengths, masses, inertias, pdes, vdes)
+    online_result = run_online(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes)
 
     last_param = online_result["param_history"][-1]
-    offline_result = run_fixed(dt, trip_lengths, masses, inertias, pdes, vdes, last_param)
+    offline_result = run_fixed(dt, trip_lengths, masses, inertias, mass_estimates, inertia_estimates, pdes, vdes, last_param)
 
     online_cost = np.sum(online_result["cost_history"])
     offline_cost = np.sum(offline_result["cost_history"])
