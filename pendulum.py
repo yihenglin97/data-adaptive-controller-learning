@@ -1,10 +1,12 @@
+import argparse 
+
+import torch  # Must import before NumPy to avoid MKL double-link bug on Mac.
 import numpy as np
 from scipy.linalg import solve_continuous_are, solve_discrete_are
 import scipy.signal as sig
-import torch
 import tqdm
 
-from core.systems.batched import InvertedPendulum
+#from core.systems.batched import InvertedPendulum
 from GAPS import GAPSEstimator
 
 
@@ -16,8 +18,8 @@ class LinearSystem:
         Ad, Bd, Cd, Dd, _ = sig.cont2discrete(sys_c, dt)
         assert np.all(Cd.flat == np.eye(n).flat)
         assert np.all(Dd.flat == np.zeros((n, m)).flat)
-        self.Ad = torch.tensor(Ad)
-        self.Bd = torch.tensor(Bd)
+        self.Ad = torch.tensor(Ad, dtype=torch.float)
+        self.Bd = torch.tensor(Bd, dtype=torch.float)
 
     def step(self, x, u, t0, t1):
         assert t1 - t0 == self.dt
@@ -55,7 +57,7 @@ def pendulum_gains_lqrd(m, l, dt):
     Ad, Bd = sys.Ad, sys.Bd
     Qd = dt * _Q
     Rd = dt * _R
-    Pd = solve_discrete_are(Ad, Bd, Qd, Rd)
+    Pd = solve_discrete_are(Ad, Bd, Qd, Rd).astype(np.float32)
     Kd = np.linalg.solve(Rd + Bd.T @ Pd @ Bd, Bd.T @ Pd @ Ad)
     kp, kd = Kd.flat
     return kp, kd
@@ -98,9 +100,14 @@ def ulprocess(seed, noise, attraction):
 
 
 def main():
-    dt = 0.01 # Discretization time interval.
-    N = 10    # Number of step-changes in mass.
+    dt = 0.01  # Discretization time interval.
+    N = 10     # Number of step-changes in mass.
     T = 10000  # Number of timesteps per step-change in mass.
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("outpath", type=str)
+    parser.add_argument("--walk", action="store_true")
+    args = parser.parse_args()
 
     buf_len = int(1.0 / dt)
     rate = 1e1
@@ -111,7 +118,10 @@ def main():
 
     np.random.seed(100)
     masses = 2 ** np.random.uniform(-1, 1, size=N)
-    disturbance = ulprocess(0, 0.2 * dt, 0.2)
+    if args.walk:
+        disturbance = ulprocess(seed=0, noise=0.25 * dt, attraction=0.2)
+    else:
+        disturbance = ulprocess(seed=0, noise=1.0 * dt, attraction=1.0)
     xs = torch.zeros((2, 2))
 
     x_log = []
@@ -121,8 +131,8 @@ def main():
     cost_log = []
 
     for mass in tqdm.tqdm(masses):
-        system = InvertedPendulum(m=mass, l=1.0)
-        #system = LinearSystem(*pendulum_linearize(m=mass, l=1.0), dt)
+        #system = InvertedPendulum(m=mass, l=1.0)
+        system = LinearSystem(*pendulum_linearize(m=mass, l=1.0), dt)
         def dynamics(x, u):
             return system.step(x[None, :], u[None, :], 0.0, dt)[0]
 
@@ -172,7 +182,7 @@ def main():
     # Save data.
     x_log = np.stack(x_log)
     np.savez(
-        "pendulum.npz",
+        args.outpath,
         dt=dt,
         x_log=x_log,
         theta_log_LQ=np.stack(theta_log_LQ),

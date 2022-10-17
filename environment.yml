@@ -1,0 +1,13 @@
+name: gaps
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - pandas
+  - pytorch::pytorch
+  - seaborn
+  - tqdm
+  - pip
+  - pip:
+    - git+git://github.com/learning-and-control/core@batched
