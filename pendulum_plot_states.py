@@ -1,3 +1,4 @@
+import itertools as it
 from pathlib import Path
 import sys
 
@@ -8,12 +9,14 @@ import seaborn as sns
 
 
 def main():
-    names = ["gaussian", "walk"]
-    datas = [np.load(f"pendulum_{n}.npz") for n in names]
+    systems = ["linear", "nonlinear"]
+    noises = ["gaussian", "walk"]
+    #datas = [np.load(f"pendulum_{n}.npz") for n in names]
     ANGLE = "angle (degrees)"
 
     dfs = []
-    for data, name in zip(datas, names):
+    for system, noise in it.product(systems, noises):
+        data = np.load(f"pendulum_{system}_{noise}.npz")
         dt = data["dt"]
         x_log = data["x_log"]
         time = dt * np.arange(len(x_log))
@@ -22,13 +25,15 @@ def main():
                 "time": time,
                 ANGLE: np.degrees(x_log[:, i, 0]),
                 "controller": controller,
-                "disturbance": name,
+                "disturbance": noise,
+                "system": system,
             }))
     df = pd.concat(dfs, ignore_index=True)
 
     grid = sns.relplot(
         data=df,
         kind="line",
+        row="system",
         col="disturbance",
         x="time",
         y=ANGLE,

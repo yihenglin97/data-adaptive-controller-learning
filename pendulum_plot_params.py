@@ -1,3 +1,4 @@
+import itertools as it
 from pathlib import Path
 import sys
 
@@ -8,33 +9,33 @@ import seaborn as sns
 
 
 def main():
-    names = ["gaussian", "walk"]
-    datas = [np.load(f"pendulum_{n}.npz") for n in names]
+    systems = ["linear", "nonlinear"]
+    noises = ["gaussian", "walk"]
 
-    param_dfs = []
-    for data, name in zip(datas, names):
+    dfs = []
+    for system, noise in it.product(systems, noises):
+        data = np.load(f"pendulum_{system}_{noise}.npz")
         dt = data["dt"]
-        x_log = data["x_log"]
-        cost_log = data["cost_log"]
-        mass_log = data["mass_log"]
-        time = dt * np.arange(len(x_log))
         for controller in ["ours", "LQ"]:
             theta_log = data["theta_log_" + controller]
+            time = dt * np.arange(len(theta_log))
             for value, paramname in zip(theta_log.T, ["kp", "kd"]):
-                param_dfs.append(pd.DataFrame(dict(
+                dfs.append(pd.DataFrame(dict(
                     time=time,
                     gain=value,
                     param=paramname,
                     controller=controller,
-                    disturbance=name,
+                    disturbance=noise,
+                    system=system,
                 )))
-    param_df = pd.concat(param_dfs, ignore_index=True)
+    df = pd.concat(dfs, ignore_index=True)
 
     sns.set_style("ticks", {"axes.grid" : True})
     param_grid = sns.relplot(
-        data=param_df,
+        data=df,
         kind="line",
         col="disturbance",
+        row="system",
         x="time",
         y="gain",
         style="controller",

@@ -27,7 +27,7 @@ class LinearSystem:
 
 
 _Q = torch.eye(2, dtype=torch.double)
-_R = 0.01 * torch.eye(1, dtype=torch.double)
+_R = 0.1 * torch.eye(1, dtype=torch.double)
 
 
 def _cost(xs, us):
@@ -100,7 +100,7 @@ def ulprocess(seed, noise, attraction):
 def main():
     dt = 0.01  # Discretization time interval.
     N = 3     # Number of step-changes in mass.
-    T = 1000  # Number of timesteps per step-change in mass.
+    T = 3000  # Number of timesteps per step-change in mass.
 
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)
@@ -108,8 +108,8 @@ def main():
     parser.add_argument("--nonlinear", action="store_true")
     args = parser.parse_args()
 
-    buf_len = int(1.0 / dt)
-    rate = 1e-1
+    buf_len = 10*int(1.0 / dt)
+    rate = 1e-2
     estimator = GAPSEstimator(buffer_length=buf_len)
     theta = torch.tensor(pendulum_gains_lqrd(1.0, 1.0, dt))
     prev_dgdx = None
@@ -118,9 +118,9 @@ def main():
     np.random.seed(100)
     masses = 2 ** np.random.uniform(-1, 1, size=N)
     if args.walk:
-        disturbance = ulprocess(seed=0, noise=1.0 * dt, attraction=0.05)
+        disturbance = ulprocess(seed=0, noise=2.0 * dt, attraction=0.05)
     else:
-        disturbance = ulprocess(seed=0, noise=15.0 * dt, attraction=1.0)
+        disturbance = ulprocess(seed=0, noise=30.0 * dt, attraction=1.0)
     xs = torch.zeros((2, 2), dtype=torch.double)
 
     x_log = []
