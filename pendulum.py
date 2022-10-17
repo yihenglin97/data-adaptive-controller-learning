@@ -6,7 +6,7 @@ from scipy.linalg import solve_continuous_are, solve_discrete_are
 import scipy.signal as sig
 import tqdm
 
-#from core.systems.batched import InvertedPendulum
+from core.systems.batched import InvertedPendulum
 from GAPS import GAPSEstimator
 
 
@@ -18,16 +18,16 @@ class LinearSystem:
         Ad, Bd, Cd, Dd, _ = sig.cont2discrete(sys_c, dt)
         assert np.all(Cd.flat == np.eye(n).flat)
         assert np.all(Dd.flat == np.zeros((n, m)).flat)
-        self.Ad = torch.tensor(Ad, dtype=torch.float)
-        self.Bd = torch.tensor(Bd, dtype=torch.float)
+        self.Ad = torch.tensor(Ad, dtype=torch.double)
+        self.Bd = torch.tensor(Bd, dtype=torch.double)
 
     def step(self, x, u, t0, t1):
         assert t1 - t0 == self.dt
         return x @ self.Ad.T + u @ self.Bd.T
 
 
-_Q = torch.eye(2)
-_R = 0.01 * torch.eye(1)
+_Q = torch.eye(2, dtype=torch.double)
+_R = 0.01 * torch.eye(1, dtype=torch.double)
 
 
 def _cost(xs, us):
@@ -57,7 +57,7 @@ def pendulum_gains_lqrd(m, l, dt):
     Ad, Bd = sys.Ad, sys.Bd
     Qd = dt * _Q
     Rd = dt * _R
-    Pd = solve_discrete_are(Ad, Bd, Qd, Rd).astype(np.float32)
+    Pd = solve_discrete_are(Ad, Bd, Qd, Rd).astype(np.double)
     Kd = np.linalg.solve(Rd + Bd.T @ Pd @ Bd, Bd.T @ Pd @ Ad)
     kp, kd = Kd.flat
     return kp, kd
@@ -77,8 +77,6 @@ class PDController(torch.nn.Module):
 
 def controller_ours(x, theta):
     return PDController(*theta)(x[None, :])[0]
-
-
 def t2np(t):
     if t is not None:
         return t.detach().numpy()
@@ -101,16 +99,17 @@ def ulprocess(seed, noise, attraction):
 
 def main():
     dt = 0.01  # Discretization time interval.
-    N = 10     # Number of step-changes in mass.
-    T = 10000  # Number of timesteps per step-change in mass.
+    N = 3     # Number of step-changes in mass.
+    T = 1000  # Number of timesteps per step-change in mass.
 
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)
     parser.add_argument("--walk", action="store_true")
+    parser.add_argument("--nonlinear", action="store_true")
     args = parser.parse_args()
 
     buf_len = int(1.0 / dt)
-    rate = 1e1
+    rate = 1e-1
     estimator = GAPSEstimator(buffer_length=buf_len)
     theta = torch.tensor(pendulum_gains_lqrd(1.0, 1.0, dt))
     prev_dgdx = None
@@ -119,10 +118,10 @@ def main():
     np.random.seed(100)
     masses = 2 ** np.random.uniform(-1, 1, size=N)
     if args.walk:
-        disturbance = ulprocess(seed=0, noise=0.25 * dt, attraction=0.2)
+        disturbance = ulprocess(seed=0, noise=1.0 * dt, attraction=0.05)
     else:
-        disturbance = ulprocess(seed=0, noise=1.0 * dt, attraction=1.0)
-    xs = torch.zeros((2, 2))
+        disturbance = ulprocess(seed=0, noise=15.0 * dt, attraction=1.0)
+    xs = torch.zeros((2, 2), dtype=torch.double)
 
     x_log = []
     mass_log = []
@@ -131,8 +130,11 @@ def main():
     cost_log = []
 
     for mass in tqdm.tqdm(masses):
-        #system = InvertedPendulum(m=mass, l=1.0)
-        system = LinearSystem(*pendulum_linearize(m=mass, l=1.0), dt)
+        if args.nonlinear:
+            system = InvertedPendulum(m=mass, l=1.0)
+        else:
+            system = LinearSystem(*pendulum_linearize(m=mass, l=1.0), dt)
+
         def dynamics(x, u):
             return system.step(x[None, :], u[None, :], 0.0, dt)[0]
 

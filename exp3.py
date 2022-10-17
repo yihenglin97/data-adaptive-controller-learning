@@ -28,10 +28,10 @@ def exp3(rng, arms, T=None, rate=None):
     y = np.ones(arms)
 
     while True:
-        p = y / np.sum(y)
-        i = rng.choice(arms, p=p)
+        y /= np.sum(y)
+        i = rng.choice(arms, p=y)
         loss = yield i
-        y[i] *= np.exp(-rate * loss / p[i])
+        y[i] *= np.exp(-rate * loss / y[i])
 
 
 def main():

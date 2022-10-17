@@ -25,7 +25,7 @@ def main():
         xlabel="time",
         ylabel="cost(ours) - cost(LQR), cumulative",
         xlim=[time[0], time[-1] + dt],
-        ylim=[-10, 4],  # TODO: get from data
+        #ylim=[-10, 4],  # TODO: get from data
     )
     ax.grid(True)
     ax.legend(loc="lower left", title="disturbance")

@@ -1,7 +1,12 @@
-all: pendulum_gaussian.pdf pendulum_walk.pdf
+all: pendulum_params.pdf pendulum_costs.pdf
 
-pendulum_%.pdf: pendulum_plot.py pendulum_%.npz
-	python $^ $@
+DATA: pendulum_gaussian.npz pendulum_walk.npz
+
+pendulum_params.pdf: pendulum_plot_params.py DATA
+	python $^
+
+pendulum_costs.pdf: pendulum_plot_costs.py DATA
+	python $^
 
 pendulum_gaussian.npz: pendulum.py
 	python pendulum.py $@
