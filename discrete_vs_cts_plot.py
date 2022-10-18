@@ -17,6 +17,12 @@ LIGHT_GREY = "#BBBBBB"
 ARM = "MPC horizon"
 
 
+def reverse_category(df, col):
+    cat = df[col].astype("category")
+    cat = cat.cat.set_categories(cat.cat.categories[::-1], ordered=True)
+    df[col] = cat
+
+
 def main():
 
     zip = np.load("discrete_vs_cts.npz")
@@ -48,9 +54,10 @@ def main():
     for k, means in enumerate(batch_means):
         assert len(means.shape) == 1
         dfs.append(pd.DataFrame({"mean cost": means, ARM: k}))
-    df = pd.concat(dfs, ignore_index=True)
+    df_horizons = pd.concat(dfs, ignore_index=True)
+    reverse_category(df_horizons, ARM)
     grid = sns.catplot(
-        data=df,
+        data=df_horizons,
         kind="violin",
         bw=0.2,
         linewidth=0.5,
@@ -75,9 +82,7 @@ def main():
         BATCH: np.arange(len(dis_arm_history)),
         ARM: dis_arm_history,
     })
-    arm_cat = df_exp3[ARM].astype("category")
-    arm_cat = arm_cat.cat.set_categories(arm_cat.cat.categories[::-1], ordered=True)
-    df_exp3[ARM] = arm_cat
+    reverse_category(df_exp3, ARM)
     grid = sns.catplot(
         kind="swarm",
         s=2.5,
@@ -118,16 +123,16 @@ def main():
     #reg_vs = np.cumsum(dis_cost_history - cts_cost_history)
     reg_dis = np.cumsum(dis_cost_history - dis_opt_cost_history)
     reg_cts = np.cumsum(cts_cost_history - cts_opt_cost_history)
-    df = pd.DataFrame({
+    df_reg = pd.DataFrame({
         "time": time_skip,
         "BAPS vs.\\ optimal": reg_dis[::skip],
         "GAPS vs.\\ final": reg_cts[::skip],
         #"BAPS vs. GAPS": reg_vs[::skip],
     })
     REGRET = "cumulative cost difference"
-    df = pd.melt(df, id_vars="time", var_name="algorithm", value_name=REGRET)
+    df_reg = pd.melt(df_reg, id_vars="time", var_name="algorithm", value_name=REGRET)
     grid = sns.relplot(
-        data=df,
+        data=df_reg,
         kind="line",
         x="time",
         y=REGRET,
