@@ -99,8 +99,8 @@ def ulprocess(seed, noise, gamma):
 
 def main():
     dt = 0.01  # Discretization time interval.
-    N = 3     # Number of step-changes in mass.
-    T = 3000  # Number of timesteps per step-change in mass.
+    N = 10     # Number of step-changes in mass.
+    T = 10000  # Number of timesteps per step-change in mass.
 
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)
@@ -118,9 +118,9 @@ def main():
     np.random.seed(100)
     masses = 2 ** np.random.uniform(-1, 1, size=N)
     if args.walk:
-        disturbance = ulprocess(seed=0, noise=2.0 * dt, gamma=0.95)
+        disturbance = ulprocess(seed=0, noise=0.5 * dt, gamma=0.95)
     else:
-        disturbance = ulprocess(seed=0, noise=30.0 * dt, gamma=0.0)
+        disturbance = ulprocess(seed=0, noise=8.0 * dt, gamma=0.0)
     xs = torch.zeros((2, 2), dtype=torch.double)
 
     x_log = []
