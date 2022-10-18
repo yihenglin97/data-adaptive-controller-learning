@@ -13,6 +13,10 @@ from LinearTracking import LinearTracking
 from MPCLTI import MPCLTI
 
 
+LIGHT_GREY = "#BBBBBB"
+ARM = "MPC horizon"
+
+
 def main():
 
     zip = np.load("discrete_vs_cts.npz")
@@ -34,88 +38,105 @@ def main():
     step_losses = np.mean(horizon_cost_histories, axis=1)
 
     plt.rc("figure.constrained_layout", use=True)
-
-    # Stuff to make our plots look better.
-    bar_kwargs = dict(color="#BBBBBB", edgecolor="black", linewidth=0.5)
-    bar_axis_set = dict(yticks=horizons, ylim=[-0.5, max_horizon + 0.5], axisbelow=True)
-    time_ticks = [0, T // 4, T // 2, T - T // 4, T]
-
-    fig_exp3, (ax_cost, ax_trace, ax_hist) = plt.subplots(
-        1, 3,
-        figsize=(10, 2.5),
-        constrained_layout=True,
-        gridspec_kw=dict(
-            width_ratios=[1, 2, 1],
-        ),
-    )
+    plt.rc("text", usetex=True)
+    plt.rc("font", size=12)
 
     # Plot the mean per-step cost of each MPC horizon with full trust.
-    ax_cost.barh(np.arange(n_horizons), step_losses, **bar_kwargs)
-    ax_cost.set(xlabel="mean per-step loss", ylabel="MPC horizon", **bar_axis_set)
-
     batches = horizon_cost_histories[:, :n_batches*exp3_batch].reshape((n_horizons, n_batches, exp3_batch))
-    batch_sums = np.sum(batches, axis=-1)
+    batch_means = np.mean(batches, axis=-1)
     dfs = []
-    for k, sums in enumerate(batch_sums):
-        assert len(sums.shape) == 1
-        dfs.append(pd.DataFrame({"cost": sums, "horizon": k}))
+    for k, means in enumerate(batch_means):
+        assert len(means.shape) == 1
+        dfs.append(pd.DataFrame({"mean cost": means, ARM: k}))
     df = pd.concat(dfs, ignore_index=True)
     grid = sns.catplot(
         data=df,
         kind="violin",
-        x="horizon",
-        y="cost",
+        bw=0.2,
+        linewidth=0.5,
+        orient="h",
+        x="mean cost",
+        y=ARM,
+        height=3.2,
+        aspect=1.2,
+        cut=0,
+        inner="quartiles",
+        color=LIGHT_GREY,
     )
+    for ax in grid.axes.flatten():
+        ax.grid(True, axis="x")
+        for c in ax.collections:
+            c.set_edgecolor("black")
     grid.savefig("Plots/batch_sum_hists.pdf")
-    print("saved batch sum hists")
 
     # Plot the behavior of EXP3.
-    # Set up histogram bins so we get one centered bin per horizon.
-    bins_h = np.concatenate([horizons, [max_horizon + 1]]) - 0.5
-    bins_t = np.linspace(0, n_batches, 45)
-    ax_trace.hist2d(range(n_batches), dis_arm_history, bins=(bins_t, bins_h), cmap="Greys")
-    ax_trace.set(xlabel="EXP3 batch", yticks=horizons)
+    BATCH = "EXP3 batch"
+    df_exp3 = pd.DataFrame({
+        BATCH: np.arange(len(dis_arm_history)),
+        ARM: dis_arm_history,
+    })
+    arm_cat = df_exp3[ARM].astype("category")
+    arm_cat = arm_cat.cat.set_categories(arm_cat.cat.categories[::-1], ordered=True)
+    df_exp3[ARM] = arm_cat
+    grid = sns.catplot(
+        kind="swarm",
+        s=2.5,
+        data=df_exp3,
+        x=BATCH,
+        y=ARM,
+        color="black",
+        height=3.2,
+        aspect=2.1,
+    )
+    grid.savefig("Plots/exp3_scatter.pdf")
 
-    counts = np.bincount(dis_arm_history)
-    ax_hist.barh(horizons, counts, **bar_kwargs)
-    ax_hist.set(xlabel="total batches chosen", **bar_axis_set)
-    ax_hist.spines.top.set(visible=False)
-    ax_hist.spines.right.set(visible=False)
-
-    for ax in (ax_cost, ax_hist):
-        ax.spines.top.set(visible=False)
-        ax.spines.right.set(visible=False)
-        ax.spines.bottom.set(visible=False)
-        ax.grid(axis="x")
-
-    fig_exp3.savefig("Plots/exp3_horizon_selection.pdf")
+    # Subsample line plots for less "grittiness".
+    skip = T // 1000
+    time_skip = np.arange(T)[::skip]
 
     # Plot the evolution of the policy parameters.
-    cmap = mpl.cm.get_cmap("winter", n_horizons)
-    fig_params, ax = plt.subplots(1, 1, figsize=(4.5, 2.5))
-    for i in range(max_horizon):
-        ax.plot(cts_param_history[:, i], label = f"{i = }", color=cmap(i))
-    ax.legend(bbox_to_anchor=(1, 0.5), loc="center left")
-    ax.set(xlabel="time", xticks=time_ticks, ylabel="$\\theta_i$ value")
+    THETA_I = "$\\theta_i$"
+    df_gaps = pd.DataFrame(cts_param_history[::skip])
+    df_gaps["time"] = time_skip
+    df_gaps = pd.melt(df_gaps, id_vars="time", var_name=THETA_I)
+    fig_params = sns.relplot(
+        data=df_gaps,
+        kind="line",
+        x="time",
+        y="value",
+        hue=THETA_I,
+        palette="flare",
+        height=3.0,
+        aspect=1.3,
+    )
     fig_params.savefig("Plots/params_update.pdf")
 
-    # Regret analysis...
-    fig_regret, (ax_dis, ax_cts) = plt.subplots(1, 2, figsize=(8, 2.5))
-
-    # Discrete regret.
+    # Regret analysis.
     optimal_horizon = np.argmin(step_losses)
     print(f"{optimal_horizon = }")
     dis_opt_cost_history = horizon_cost_histories[optimal_horizon]
-    ax_dis.plot(np.cumsum(dis_cost_history - dis_opt_cost_history), color="black", label="discrete")
-    ax_dis.legend(loc="lower right")
-    ax_dis.set(xlabel="time", xticks=time_ticks, ylabel="regret")
-
-    # Continuous regret.
-    ax_cts.plot(np.cumsum(cts_cost_history - cts_opt_cost_history), color="black", label="continuous")
-    ax_cts.legend(loc="lower right")
-    ax_cts.set(xlabel="time", xticks=time_ticks, ylabel="regret")
-
-    fig_regret.savefig("Plots/dis_vs_cts_regret.pdf")
+    #reg_vs = np.cumsum(dis_cost_history - cts_cost_history)
+    reg_dis = np.cumsum(dis_cost_history - dis_opt_cost_history)
+    reg_cts = np.cumsum(cts_cost_history - cts_opt_cost_history)
+    df = pd.DataFrame({
+        "time": time_skip,
+        "BAPS vs.\\ optimal": reg_dis[::skip],
+        "GAPS vs.\\ final": reg_cts[::skip],
+        #"BAPS vs. GAPS": reg_vs[::skip],
+    })
+    REGRET = "cumulative cost difference"
+    df = pd.melt(df, id_vars="time", var_name="algorithm", value_name=REGRET)
+    grid = sns.relplot(
+        data=df,
+        kind="line",
+        x="time",
+        y=REGRET,
+        col="algorithm",
+        color="black",
+        height=3.0,
+        aspect=1.3,
+    )
+    grid.savefig("Plots/dis_vs_cts_regret.pdf")
 
     # Show the advantage of using trust values instead of horizon tuning.
     dis_total = np.sum(dis_opt_cost_history)
