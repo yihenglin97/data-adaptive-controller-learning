@@ -83,17 +83,17 @@ def t2np(t):
     return None
 
 
-def ulprocess(seed, noise, attraction):
+def ulprocess(seed, noise, gamma):
     """Ornstein-Uhlenbeck random walk generator.
 
-    When attraction == 1, degenerates into Gaussian noise.
+    When gamma == 0, degenerates into Gaussian noise.
     """
     npr = np.random.default_rng(seed=seed)
-    if attraction > 1:
-        raise ValueError("attraction should be <= 1.")
+    if gamma < 0 or gamma > 1:
+        raise ValueError("gamma should be in [0, 1].")
     x = 0.0
     while True:
-        x += noise * npr.normal() - attraction * x
+        x = gamma * x + noise * npr.normal()
         yield x
 
 
@@ -118,9 +118,9 @@ def main():
     np.random.seed(100)
     masses = 2 ** np.random.uniform(-1, 1, size=N)
     if args.walk:
-        disturbance = ulprocess(seed=0, noise=2.0 * dt, attraction=0.05)
+        disturbance = ulprocess(seed=0, noise=2.0 * dt, gamma=0.95)
     else:
-        disturbance = ulprocess(seed=0, noise=30.0 * dt, attraction=1.0)
+        disturbance = ulprocess(seed=0, noise=30.0 * dt, gamma=0.0)
     xs = torch.zeros((2, 2), dtype=torch.double)
 
     x_log = []
