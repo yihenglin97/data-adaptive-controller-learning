@@ -12,8 +12,6 @@ REGRET = "cost(ours) - cost(LQR), cumulative"
 
 
 def main():
-    names = ["gaussian", "walk"]
-    datas = [np.load(f"pendulum_{n}.npz") for n in names]
     colors = ["red", "black"]
 
     fig, ax = plt.subplots(1, 1, figsize=(5, 3), constrained_layout=True)
