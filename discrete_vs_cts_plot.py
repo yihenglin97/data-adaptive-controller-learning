@@ -111,7 +111,7 @@ def main():
         y="value",
         hue=THETA_I,
         palette="flare",
-        height=3.0,
+        height=2.7,
         aspect=1.3,
     )
     fig_params.savefig("Plots/params_update.pdf")
@@ -139,7 +139,7 @@ def main():
         col="algorithm",
         color="black",
         height=3.0,
-        aspect=1.3,
+        aspect=1.0,
     )
     grid.savefig("Plots/dis_vs_cts_regret.pdf")
 
