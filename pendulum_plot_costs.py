@@ -8,20 +8,19 @@ import pandas as pd
 import seaborn as sns
 
 
-REGRET = "cost(ours) - cost(LQR), cumulative"
+REGRET = "cost difference, ours - LQR"
 
 
 def main():
-    colors = ["red", "black"]
 
-    fig, ax = plt.subplots(1, 1, figsize=(5, 3), constrained_layout=True)
+    plt.rc("text", usetex=True)
+    plt.rc("font", size=12)
 
-    systems = ["linear", "nonlinear"]
     noises = ["gaussian", "walk"]
 
     dfs = []
-    for system, noise in it.product(systems, noises):
-        data = np.load(f"pendulum_{system}_{noise}.npz")
+    for noise in noises:
+        data = np.load(f"pendulum_nonlinear_{noise}.npz")
         dt = data["dt"]
         cost_log = data["cost_log"]
         time = dt * np.arange(len(cost_log))
@@ -32,22 +31,31 @@ def main():
             REGRET: regret,
             "time": time,
             "disturbance": noise,
-            "system": system,
         }))
     df = pd.concat(dfs, ignore_index=True)
 
+    sns.set_style("ticks", {"axes.grid" : True})
     grid = sns.relplot(
         data=df,
         kind="line",
         x="time",
         y=REGRET,
-        hue="disturbance",
-        style="system",
-        height=3.0,
-        aspect=1.3,
+        col="disturbance",
+        color="black",
+        height=2.7,
+        aspect=2.2,
+        facet_kws=dict(
+            gridspec_kws=dict(
+                hspace=0.05,
+            )
+        )
     )
+    # Special case for main result in paper.
+    ylim = list(grid.axes.flat[0].get_ylim())
+    if -8200 < ylim[0] < -8000:
+        ylim[0] = -8000
     # Python's sloppy scoping - `time` was defined in loading loop.
-    grid.set(xlim=[time[0], time[-1] + dt])
+    grid.set(xlim=[time[0], time[-1] + dt], ylim=ylim)
     grid.savefig("pendulum_costs.pdf")
 
 

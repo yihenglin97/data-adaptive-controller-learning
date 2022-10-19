@@ -9,14 +9,12 @@ import seaborn as sns
 
 
 def main():
-    systems = ["linear", "nonlinear"]
     noises = ["gaussian", "walk"]
-    #datas = [np.load(f"pendulum_{n}.npz") for n in names]
     ANGLE = "angle (degrees)"
 
     dfs = []
-    for system, noise in it.product(systems, noises):
-        data = np.load(f"pendulum_{system}_{noise}.npz")
+    for noise in noises:
+        data = np.load(f"pendulum_nonlinear_{noise}.npz")
         dt = data["dt"]
         x_log = data["x_log"]
         time = dt * np.arange(len(x_log))
@@ -26,14 +24,12 @@ def main():
                 ANGLE: np.degrees(x_log[:, i, 0]),
                 "controller": controller,
                 "disturbance": noise,
-                "system": system,
             }))
     df = pd.concat(dfs, ignore_index=True)
 
     grid = sns.relplot(
         data=df,
         kind="line",
-        row="system",
         col="disturbance",
         x="time",
         y=ANGLE,
@@ -46,8 +42,15 @@ def main():
             )
         )
     )
+    for ax in grid.axes.flat:
+        ax.grid(True)
+    # Zoom in to the outermost ticks - it's ok if we clip a few stray peaks.
+    ax0 = grid.axes.flat[0]
+    ylim = np.amax(np.abs(ax0.get_ylim()))
+    tickabs = np.abs(ax0.get_yticks())
+    ymax = np.amax(tickabs[tickabs < ylim])
     # Python's sloppy scoping - `time` was defined in loading loop.
-    grid.set(xlim=[time[0], time[-1] + dt])
+    grid.set(xlim=[time[0], time[-1] + dt], ylim=[-ymax, ymax])
     grid.savefig("pendulum_states.pdf")
 
 

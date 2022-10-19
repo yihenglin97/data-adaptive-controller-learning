@@ -9,12 +9,15 @@ import seaborn as sns
 
 
 def main():
-    systems = ["linear", "nonlinear"]
+
+    plt.rc("text", usetex=True)
+    plt.rc("font", size=12)
+
     noises = ["gaussian", "walk"]
 
     dfs = []
-    for system, noise in it.product(systems, noises):
-        data = np.load(f"pendulum_{system}_{noise}.npz")
+    for noise in noises:
+        data = np.load(f"pendulum_nonlinear_{noise}.npz")
         dt = data["dt"]
         for controller in ["ours", "LQ"]:
             theta_log = data["theta_log_" + controller]
@@ -26,7 +29,6 @@ def main():
                     param=paramname,
                     controller=controller,
                     disturbance=noise,
-                    system=system,
                 )))
     df = pd.concat(dfs, ignore_index=True)
 
@@ -35,12 +37,13 @@ def main():
         data=df,
         kind="line",
         col="disturbance",
-        row="system",
         x="time",
         y="gain",
         style="controller",
+        size="controller",
+        sizes=[1.5, 1.0],
         hue="param",
-        height=2.5,
+        height=2.7,
         aspect=2.0,
         facet_kws=dict(
             gridspec_kws=dict(
