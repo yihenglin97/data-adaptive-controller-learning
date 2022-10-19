@@ -65,7 +65,7 @@ class MPCLTI(Controller.Controller):
             # Mutates control_action
             dudtheta = grads
         else:
-            grad = np.zeros_like(control_action)
+            grad = np.zeros_like(control_action)[:, None]
             for i in range(k):
                 this_grad = self.Multipliers[i]@(predicted_disturbances[:, i])
                 control_action += (self.param*this_grad + self.Multipliers[i]@(self.A@V[:, i] - V[:, i+1]))

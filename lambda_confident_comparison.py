@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.linalg import solve_discrete_are
+import seaborn as sns
 
 import LinearTracking
 from MPCLTI import MPCLTI
@@ -178,26 +179,28 @@ def main():
     #
     plt.rc("text", usetex=True)
     plt.rc("font", size=12)
-    fig, axs = plt.subplots(1, 2, figsize=(9, 3), constrained_layout=True)
+    fig, axs = plt.subplots(1, 2, figsize=(9, 2.5), constrained_layout=True)
     ax_lam, ax_err = axs
 
-    ax_lam.plot(confident.lambda_history, color="black", label="$\\lambda$-confident")
-    ax_lam.plot(mpc.param_history, color="black", linestyle="--", label="ours")
+    ax_lam.plot(confident.lambda_history, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
+    ax_lam.plot(mpc.param_history, color="black", label="ours", zorder=3)
     ax_lam.set_ylim([-0.1, 1.1])
     ax_lam.set_ylabel("confidence $\\lambda$")
 
     costs_ours, whole_trajectory = LTI_instance.reset()
     costs_ours = pd.Series(costs_ours).rolling(ROLLING_MEAN).mean()
     costs_confident = pd.Series(costs_confident).rolling(ROLLING_MEAN).mean()
-    ax_err.plot(costs_confident, color="black", label="$\\lambda$-confident")
-    ax_err.plot(costs_ours, color="black", linestyle="--", label="ours")
+    ax_err.plot(costs_confident, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
+    ax_err.plot(costs_ours, color="black", label="ours", zorder=3)
     ax_err.set_ylabel("LQR cost (moving average)")
 
     for ax in axs:
         ax.set_xlabel("time")
-        ax.axvline(become_good, label="$\\widehat w$ becomes accurate", color="red", zorder=-1)
-        ax.legend()
+        ax.grid(True)
+        ax.axvline(become_good, label="$\\widehat w$ becomes accurate", color="red", zorder=2)
+        sns.despine(ax=ax)
 
+    ax_err.legend()
     fig.savefig("ours_vs_lambda_confident.pdf")
 
 
