@@ -65,7 +65,7 @@ def main():
         x="mean cost",
         y=ARM,
         height=3.2,
-        aspect=1.2,
+        aspect=1.1,
         cut=0,
         inner="quartiles",
         color=LIGHT_GREY,
@@ -77,7 +77,7 @@ def main():
     grid.savefig("Plots/batch_sum_hists.pdf")
 
     # Plot the behavior of EXP3.
-    BATCH = "EXP3 batch"
+    BATCH = "BAPS batch"
     df_exp3 = pd.DataFrame({
         BATCH: np.arange(len(dis_arm_history)),
         ARM: dis_arm_history,
@@ -89,9 +89,10 @@ def main():
         data=df_exp3,
         x=BATCH,
         y=ARM,
-        color="black",
+        #color="black",
+        hue=ARM,
         height=3.2,
-        aspect=2.1,
+        aspect=1.9,
     )
     grid.savefig("Plots/exp3_scatter.pdf")
 

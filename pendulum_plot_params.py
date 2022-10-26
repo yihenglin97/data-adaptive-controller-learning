@@ -43,8 +43,8 @@ def main():
         size="controller",
         sizes=[1.5, 1.0],
         hue="param",
-        height=2.7,
-        aspect=2.0,
+        height=2.5,
+        aspect=1.2,
         facet_kws=dict(
             gridspec_kws=dict(
                 hspace=0.05,
@@ -52,6 +52,7 @@ def main():
         )
     )
     # Python's sloppy scoping - `time` was defined in loading loop.
+    param_grid.set(xticks=200 * np.arange(6))
     param_grid.set(xlim=[time[0], time[-1] + dt])
     param_grid.savefig("pendulum_params.pdf")
 

@@ -16,7 +16,7 @@ def main():
     plt.rc("text", usetex=True)
     plt.rc("font", size=12)
 
-    noises = ["gaussian", "walk"]
+    noises = ["walk", "gaussian"]
 
     dfs = []
     for noise in noises:
@@ -29,34 +29,31 @@ def main():
         dfs.append(pd.DataFrame({
             "time": time,
             REGRET: regret,
-            "time": time,
             "disturbance": noise,
         }))
     df = pd.concat(dfs, ignore_index=True)
 
+    # Too much data makes lines "gritty".
+    df = df[::100]
+
     sns.set_style("ticks", {"axes.grid" : True})
-    grid = sns.relplot(
+    fig, ax = plt.subplots(1, 1, figsize=(3.5, 2.5), constrained_layout=True)
+    sns.lineplot(
         data=df,
-        kind="line",
+        ax=ax,
+        #kind="line",
         x="time",
         y=REGRET,
-        col="disturbance",
+        size="disturbance",
         color="black",
-        height=2.7,
-        aspect=2.2,
-        facet_kws=dict(
-            gridspec_kws=dict(
-                hspace=0.05,
-            )
-        )
+        #height=2.7,
+        #aspect=1.4,
     )
-    # Special case for main result in paper.
-    ylim = list(grid.axes.flat[0].get_ylim())
-    if -8200 < ylim[0] < -8000:
-        ylim[0] = -8000
-    # Python's sloppy scoping - `time` was defined in loading loop.
-    grid.set(xlim=[time[0], time[-1] + dt], ylim=ylim)
-    grid.savefig("pendulum_costs.pdf")
+    sns.despine(ax=ax)
+    # Need to increase a little to make sure grid lines aren't clipped.
+    ax.set(xticks=200*np.arange(6))
+    ax.set(xlim=[0, 1002], ylim=[-8000, 5010])
+    fig.savefig("pendulum_costs.pdf")
 
 
 if __name__ == "__main__":
