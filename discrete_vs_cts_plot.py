@@ -10,11 +10,13 @@ import seaborn as sns
 
 from discrete import MPCHorizonSelector
 from LinearTracking import LinearTracking
+from label_lines import labelLines
 from MPCLTI import MPCLTI
 
 
 LIGHT_GREY = "#BBBBBB"
 ARM = "MPC horizon"
+HEIGHT = 2.8
 
 
 def reverse_category(df, col):
@@ -43,7 +45,7 @@ def main():
     # Reconstruct some intermediate data.
     step_losses = np.mean(horizon_cost_histories, axis=1)
 
-    plt.rc("figure.constrained_layout", use=True)
+    plt.rc("figure", autolayout=True)
     plt.rc("text", usetex=True)
     plt.rc("font", size=12)
 
@@ -64,7 +66,7 @@ def main():
         orient="h",
         x="mean cost",
         y=ARM,
-        height=3.2,
+        height=HEIGHT,
         aspect=1.1,
         cut=0,
         inner="quartiles",
@@ -85,15 +87,29 @@ def main():
     reverse_category(df_exp3, ARM)
     grid = sns.catplot(
         kind="swarm",
-        s=2.5,
+        s=1.8,
         data=df_exp3,
         x=BATCH,
         y=ARM,
-        #color="black",
         hue=ARM,
-        height=3.2,
-        aspect=1.9,
+        height=HEIGHT,
+        aspect=1.4,
+        legend=False,
     )
+    lines = np.unique(dis_arm_history) + 0.5
+    lines = [-0.5] + list(lines)
+    xmin = df_exp3[BATCH].min()
+    xmax = df_exp3[BATCH].max()
+    pad = xmax / 60.0
+    width = 0.5
+    for ax in grid.axes.flat:
+        ax.set_yticks(lines, minor=True)
+        ax.yaxis.grid(which="minor", linewidth=width, color="black")
+        ax.yaxis.set_tick_params(which="major", length=0)
+        ax.yaxis.set_tick_params(which="minor", length=14, width=width)
+        ax.spines[:].set_linewidth(width)
+        sns.despine(ax=ax, left=True, top=False)
+    grid.set(xlim=[xmin - pad, xmax + pad])
     grid.savefig("Plots/exp3_scatter.pdf")
 
     # Subsample line plots for less "grittiness".
@@ -106,15 +122,24 @@ def main():
     df_gaps["time"] = time_skip
     df_gaps = pd.melt(df_gaps, id_vars="time", var_name=THETA_I)
     fig_params = sns.relplot(
-        data=df_gaps,
         kind="line",
+        data=df_gaps,
         x="time",
         y="value",
         hue=THETA_I,
         palette="flare",
-        height=2.7,
-        aspect=1.3,
+        legend=False,
+        height=HEIGHT,
+        aspect=1.2,
     )
+    ax_params = fig_params.axes[0, 0]
+    lines = ax_params.get_lines()
+    for i, line in enumerate(lines):
+        line.set_label(f"$\\theta_{i}$")
+    xvals = [0.6 * np.amax(lines[0].get_xdata())] * len(lines)
+    labelLines(lines, align=False, xvals=xvals)
+    ax_params.set(xlim=[0.0, 1e6], ylim=[-0.05, 0.9])
+    sns.despine(ax=ax_params)
     fig_params.savefig("Plots/params_update.pdf")
 
     # Regret analysis.
@@ -130,7 +155,7 @@ def main():
         "GAPS vs.\\ final": reg_cts[::skip],
         #"BAPS vs. GAPS": reg_vs[::skip],
     })
-    REGRET = "cumulative cost difference"
+    REGRET = "cumulative cost diff."
     df_reg = pd.melt(df_reg, id_vars="time", var_name="algorithm", value_name=REGRET)
     grid = sns.relplot(
         data=df_reg,
@@ -139,9 +164,13 @@ def main():
         y=REGRET,
         col="algorithm",
         color="black",
-        height=3.0,
-        aspect=1.0,
+        height=HEIGHT,
+        aspect=0.75,
     )
+    ax = grid.axes[0, 0]
+    ax.ticklabel_format(scilimits=(0, 0))
+    ax.yaxis.offsetText.set(ha="right")
+    grid.set_titles(col_template="{col_name}")
     grid.savefig("Plots/dis_vs_cts_regret.pdf")
 
     # Show the advantage of using trust values instead of horizon tuning.

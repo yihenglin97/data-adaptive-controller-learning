@@ -178,8 +178,8 @@ def main():
     # Plotting.
     #
     plt.rc("text", usetex=True)
-    plt.rc("font", size=12)
-    fig, axs = plt.subplots(1, 2, figsize=(9, 2.5), constrained_layout=True)
+    plt.rc("font", size=11)
+    fig, axs = plt.subplots(2, 1, figsize=(4.0, 4.0), constrained_layout=True, sharex=True)
     ax_lam, ax_err = axs
 
     ax_lam.plot(confident.lambda_history, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
@@ -192,16 +192,17 @@ def main():
     costs_confident = pd.Series(costs_confident).rolling(ROLLING_MEAN).mean()
     ax_err.plot(costs_confident, color="black", linestyle="--", label="$\\lambda$-confident", zorder=3)
     ax_err.plot(costs_ours, color="black", label="ours", zorder=3)
-    ax_err.set_ylabel("LQR cost (moving average)")
+    ax_err.set_ylabel("LQR cost (moving avg.)")
 
     for ax in axs:
-        ax.set_xlabel("time")
+        ax.set(xlabel="time", xlim=[-10, 400])
         ax.grid(True)
         ax.axvline(become_good, label="$\\widehat w$ becomes accurate", color="red", zorder=2)
         sns.despine(ax=ax)
 
     ax_err.legend()
-    fig.savefig("ours_vs_lambda_confident.pdf")
+    fig.align_ylabels(axs)
+    fig.savefig("Plots/lambda_confident_comparison.pdf")
 
 
 if __name__ == '__main__':
