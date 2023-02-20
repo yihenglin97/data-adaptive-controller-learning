@@ -105,7 +105,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)
     parser.add_argument("--walk", action="store_true")
-    parser.add_argument("--nonlinear", action="store_true")
     args = parser.parse_args()
 
     buf_len = 10*int(1.0 / dt)
@@ -130,10 +129,7 @@ def main():
     cost_log = []
 
     for mass in tqdm.tqdm(masses):
-        if args.nonlinear:
-            system = InvertedPendulum(m=mass, l=1.0)
-        else:
-            system = LinearSystem(*pendulum_linearize(m=mass, l=1.0), dt)
+        system = InvertedPendulum(m=mass, l=1.0)
 
         def dynamics(x, u):
             return system.step(x[None, :], u[None, :], 0.0, dt)[0]

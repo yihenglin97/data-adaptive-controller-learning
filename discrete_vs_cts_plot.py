@@ -27,7 +27,7 @@ def reverse_category(df, col):
 
 def main():
 
-    zip = np.load("discrete_vs_cts.npz")
+    zip = np.load("Data/discrete_vs_cts.npz")
     exp3_batch = zip["exp3_batch"]
     horizon_cost_histories = zip["horizon_cost_histories"]
     dis_cost_history = zip["dis_cost_history"]

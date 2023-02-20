@@ -153,7 +153,7 @@ def main():
     cts_opt_cost_history, _ = run(LTI_instance, max_horizon, MPC_cts_opt, T)
 
     np.savez(
-        "discrete_vs_cts.npz",
+        "Data/discrete_vs_cts.npz",
         exp3_batch=exp3_batch,
         horizon_cost_histories=cost_histories,
         dis_cost_history=dis_cost_history,

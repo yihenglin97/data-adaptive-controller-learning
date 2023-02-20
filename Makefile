@@ -1,24 +1,33 @@
-all: pendulum_states.pdf pendulum_params.pdf pendulum_costs.pdf
+all: Plots/dis_vs_cts_regret.pdf Plots/pendulum_params.pdf Plots/pendulum_costs.pdf Plots/lambda_confident_comparison.pdf
 
-DATA: pendulum_linear_gaussian.npz pendulum_linear_walk.npz pendulum_nonlinear_gaussian.npz pendulum_nonlinear_walk.npz
-
-pendulum_states.pdf: pendulum_plot_states.py DATA
+Plots/pendulum_params.pdf: pendulum_plot_params.py Data/pendulum_gaussian.npz Data/pendulum_walk.npz
+	mkdir -p Plots
 	python $^
 
-pendulum_params.pdf: pendulum_plot_params.py DATA
+Plots/pendulum_costs.pdf: pendulum_plot_costs.py Data/pendulum_gaussian.npz Data/pendulum_walk.npz
+	mkdir -p Plots
 	python $^
 
-pendulum_costs.pdf: pendulum_plot_costs.py DATA
-	python $^
+Plots/dis_vs_cts_regret.pdf: discrete_vs_cts_plot.py Data/discrete_vs_cts.npz
+	mkdir -p Plots
+	python $<
 
-pendulum_nonlinear_gaussian.npz: pendulum.py
-	python pendulum.py --nonlinear $@
+Plots/lambda_confident_comparison.pdf: lambda_confident_comparison.py
+	mkdir -p Plots
+	python $<
 
-pendulum_nonlinear_walk.npz: pendulum.py
-	python pendulum.py --nonlinear --walk $@
+Data/pendulum_gaussian.npz: pendulum.py
+	mkdir -p Data
+	python $< $@
 
-pendulum_linear_gaussian.npz: pendulum.py
-	python pendulum.py $@
+Data/pendulum_walk.npz: pendulum.py
+	mkdir -p Data
+	python $< --walk $@
 
-pendulum_linear_walk.npz: pendulum.py
-	python pendulum.py --walk $@
+Data/discrete_vs_cts.npz: discrete_vs_cts.py
+	mkdir -p Data
+	python $<
+
+clean:
+	rm -f Plots/*.pdf
+	rm -f Data/*.npz

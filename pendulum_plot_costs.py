@@ -20,7 +20,7 @@ def main():
 
     dfs = []
     for noise in noises:
-        data = np.load(f"pendulum_nonlinear_{noise}.npz")
+        data = np.load(f"Data/pendulum_{noise}.npz")
         dt = data["dt"]
         cost_log = data["cost_log"]
         time = dt * np.arange(len(cost_log))
@@ -53,7 +53,7 @@ def main():
     # Need to increase a little to make sure grid lines aren't clipped.
     ax.set(xticks=200*np.arange(6))
     ax.set(xlim=[0, 1002], ylim=[-8000, 5010])
-    fig.savefig("pendulum_costs.pdf")
+    fig.savefig("Plots/pendulum_costs.pdf")
 
 
 if __name__ == "__main__":
