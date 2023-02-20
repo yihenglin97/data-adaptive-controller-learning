@@ -2,15 +2,13 @@
 
 To reproduce the plots in the ICML-submitted version:
 
-1. Create the Anaconda environment:
+1. Create the Anaconda environment (or get the required packages some other way):
 
-    conda env create -f environment.yml
-    conda activate gaps
-
-    or, get the required packages some other way.
+       conda env create -f environment.yml
+       conda activate gaps
 
 2. Run the experiments in parallel. NOTE: Will take a while.
 
-    make -j
+       make -j
 
 3. Examine output in the `Plots/` directory.
