@@ -1,6 +1,6 @@
 # data-adaptive-controller-learning
 
-To reproduce the plots in the ICML-submitted version:
+To reproduce the plots in the paper:
 
 1. Create the Anaconda environment (or get the required packages some other way):
 
