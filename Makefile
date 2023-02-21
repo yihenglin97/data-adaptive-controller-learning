@@ -1,33 +1,33 @@
-all: Plots/dis_vs_cts_regret.pdf Plots/pendulum_params.pdf Plots/pendulum_costs.pdf Plots/lambda_confident_comparison.pdf
+all: plots/dis_vs_cts_regret.pdf plots/pendulum_params.pdf plots/pendulum_costs.pdf plots/lambda_confident_comparison.pdf
 
-Plots/pendulum_params.pdf: pendulum_plot_params.py Data/pendulum_gaussian.npz Data/pendulum_walk.npz
-	mkdir -p Plots
+plots/pendulum_params.pdf: pendulum_plot_params.py data/pendulum_gaussian.npz data/pendulum_walk.npz
+	mkdir -p plots
 	python $^
 
-Plots/pendulum_costs.pdf: pendulum_plot_costs.py Data/pendulum_gaussian.npz Data/pendulum_walk.npz
-	mkdir -p Plots
+plots/pendulum_costs.pdf: pendulum_plot_costs.py data/pendulum_gaussian.npz data/pendulum_walk.npz
+	mkdir -p plots
 	python $^
 
-Plots/dis_vs_cts_regret.pdf: discrete_vs_cts_plot.py Data/discrete_vs_cts.npz
-	mkdir -p Plots
+plots/dis_vs_cts_regret.pdf: discrete_vs_cts_plot.py data/discrete_vs_cts.npz
+	mkdir -p plots
 	python $<
 
-Plots/lambda_confident_comparison.pdf: lambda_confident_comparison.py
-	mkdir -p Plots
+plots/lambda_confident_comparison.pdf: lambda_confident_comparison.py
+	mkdir -p plots
 	python $<
 
-Data/pendulum_gaussian.npz: pendulum.py
-	mkdir -p Data
+data/pendulum_gaussian.npz: pendulum.py
+	mkdir -p data
 	python $< $@
 
-Data/pendulum_walk.npz: pendulum.py
-	mkdir -p Data
+data/pendulum_walk.npz: pendulum.py
+	mkdir -p data
 	python $< --walk $@
 
-Data/discrete_vs_cts.npz: discrete_vs_cts.py
-	mkdir -p Data
+data/discrete_vs_cts.npz: discrete_vs_cts.py
+	mkdir -p data
 	python $<
 
 clean:
-	rm -f Plots/*.pdf
-	rm -f Data/*.npz
+	rm -f plots/*.pdf
+	rm -f data/*.npz

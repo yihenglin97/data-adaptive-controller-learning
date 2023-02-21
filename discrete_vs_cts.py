@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.linalg import solve_discrete_are
 
 from discrete import MPCHorizonSelector
-from LinearTracking import LinearTracking
+from lineartracking import LinearTracking
 from MPCLTI import MPCLTI
 
 

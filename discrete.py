@@ -1,8 +1,7 @@
-import Controller
+import numpy as np
+
 from exp3 import exp3
 from MPCLTI import MPCLTI
-#from scipy import linalg as la
-import numpy as np
 
 
 class MPCHorizonSelector:

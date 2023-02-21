@@ -17,7 +17,7 @@ def main():
 
     dfs = []
     for noise in noises:
-        data = np.load(f"Data/pendulum_{noise}.npz")
+        data = np.load(f"data/pendulum_{noise}.npz")
         dt = data["dt"]
         for controller in ["ours", "LQ"]:
             theta_log = data["theta_log_" + controller]
@@ -54,7 +54,7 @@ def main():
     # Python's sloppy scoping - `time` was defined in loading loop.
     param_grid.set(xticks=200 * np.arange(6))
     param_grid.set(xlim=[time[0], time[-1] + dt])
-    param_grid.savefig("Plots/pendulum_params.pdf")
+    param_grid.savefig("plots/pendulum_params.pdf")
 
 
 if __name__ == "__main__":

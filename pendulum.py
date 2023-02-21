@@ -100,7 +100,7 @@ def ulprocess(seed, noise, gamma):
 def main():
     dt = 0.01  # Discretization time interval.
     N = 10     # Number of step-changes in mass.
-    T = 10000  # Number of timesteps per step-change in mass.
+    T = 100  # Number of timesteps per step-change in mass.
 
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)

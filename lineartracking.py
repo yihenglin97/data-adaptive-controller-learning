@@ -1,7 +1,6 @@
-import Environment
 import numpy as np
 
-class LinearTracking(Environment.Environment):
+class LinearTracking:
     def __init__(self, A, B, Q, R, Qf, init_state, traj, ws, es=None, w_hats=None):
         self.A = A
         self.B = B
@@ -21,8 +20,9 @@ class LinearTracking(Environment.Environment):
         self.m = self.B.shape[1]  # the dimension of the control action
         self.T = self.V.shape[1] - 1  # the total length of the horizon
 
-        sys_params = (A, B, Q, R)
-        super().__init__(sys_params, init_state)
+        self.sys_params = (A, B, Q, R)
+        self.state = init_state
+        self.time_counter = 0
 
         assert es is None or w_hats is None
         self.W = ws

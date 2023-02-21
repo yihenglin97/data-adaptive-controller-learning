@@ -3,7 +3,6 @@ import numpy as np
 from scipy import linalg as la
 
 from GAPS import GAPSEstimator
-import Controller
 
 
 @njit
@@ -17,9 +16,10 @@ def _step(multipliers, multipliersA, max_k, param, control_action, predicted_dis
     return grads
 
 
-class MPCLTI(Controller.Controller):
+class MPCLTI:
     def __init__(self, initial_param, buffer_length, learning_rate, horizon=None):
-        super().__init__(initial_param, buffer_length, learning_rate)
+        self.param = initial_param
+        self.learning_rate = learning_rate
         self.param_history = [initial_param]
         self.A = None
         self.B = None

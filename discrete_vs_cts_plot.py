@@ -9,7 +9,7 @@ from scipy.linalg import solve_discrete_are
 import seaborn as sns
 
 from discrete import MPCHorizonSelector
-from LinearTracking import LinearTracking
+from lineartracking import LinearTracking
 from label_lines import labelLines
 from MPCLTI import MPCLTI
 
@@ -27,7 +27,7 @@ def reverse_category(df, col):
 
 def main():
 
-    zip = np.load("Data/discrete_vs_cts.npz")
+    zip = np.load("data/discrete_vs_cts.npz")
     exp3_batch = zip["exp3_batch"]
     horizon_cost_histories = zip["horizon_cost_histories"]
     dis_cost_history = zip["dis_cost_history"]
@@ -76,7 +76,7 @@ def main():
         ax.grid(True, axis="x")
         for c in ax.collections:
             c.set_edgecolor("black")
-    grid.savefig("Plots/batch_sum_hists.pdf")
+    grid.savefig("plots/batch_sum_hists.pdf")
 
     # Plot the behavior of EXP3.
     BATCH = "BAPS batch"
@@ -110,7 +110,7 @@ def main():
         ax.spines[:].set_linewidth(width)
         sns.despine(ax=ax, left=True, top=False)
     grid.set(xlim=[xmin - pad, xmax + pad])
-    grid.savefig("Plots/exp3_scatter.pdf")
+    grid.savefig("plots/exp3_scatter.pdf")
 
     # Subsample line plots for less "grittiness".
     skip = T // 1000
@@ -140,7 +140,7 @@ def main():
     labelLines(lines, align=False, xvals=xvals)
     ax_params.set(xlim=[0.0, 1e6], ylim=[-0.05, 0.9])
     sns.despine(ax=ax_params)
-    fig_params.savefig("Plots/params_update.pdf")
+    fig_params.savefig("plots/params_update.pdf")
 
     # Regret analysis.
     optimal_horizon = np.argmin(step_losses)
@@ -171,7 +171,7 @@ def main():
     ax.ticklabel_format(scilimits=(0, 0))
     ax.yaxis.offsetText.set(ha="right")
     grid.set_titles(col_template="{col_name}")
-    grid.savefig("Plots/dis_vs_cts_regret.pdf")
+    grid.savefig("plots/dis_vs_cts_regret.pdf")
 
     # Show the advantage of using trust values instead of horizon tuning.
     dis_total = np.sum(dis_opt_cost_history)

@@ -4,7 +4,7 @@ import pandas as pd
 from scipy.linalg import solve_discrete_are
 import seaborn as sns
 
-import LinearTracking
+from lineartracking import LinearTracking
 from MPCLTI import MPCLTI
 
 
@@ -159,7 +159,7 @@ def main():
 
     # This experiment is just a regulator, but the LinearTracking API expects a target trajectory.
     target_traj = np.zeros((1, T + 1))
-    LTI_instance = LinearTracking.LinearTracking(
+    LTI_instance = LinearTracking(
         A, B, Q, R, Qf=P,
         init_state=x0,
         traj=target_traj,
@@ -202,7 +202,7 @@ def main():
 
     ax_err.legend()
     fig.align_ylabels(axs)
-    fig.savefig("Plots/lambda_confident_comparison.pdf")
+    fig.savefig("plots/lambda_confident_comparison.pdf")
 
 
 if __name__ == '__main__':
