@@ -1,4 +1,5 @@
 import argparse
+import os
 
 import torch  # Must import before NumPy to avoid MKL double-link bug on Mac.
 import numpy as np
@@ -100,7 +101,12 @@ def ulprocess(seed, noise, gamma):
 def main():
     dt = 0.01  # Discretization time interval.
     N = 10     # Number of step-changes in mass.
-    T = 100  # Number of timesteps per step-change in mass.
+    # Number of timesteps per step-change in mass.
+    if os.getenv("FAST").lower() == "true":
+        T = 100
+    else:
+        T = 10000
+
 
     parser = argparse.ArgumentParser()
     parser.add_argument("outpath", type=str)

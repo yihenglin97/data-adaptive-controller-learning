@@ -52,7 +52,10 @@ def main():
     print("-" * 60)
     print("Comparing discrete vs. continuous MPC trust optimization.")
 
-    T = 1000000
+    if os.getenv("FAST").lower() == "true":
+        T = 10000
+    else:
+        T = 1000000
 
     # These parameters all affect the costs of the different MPC horizons.
     DT = 0.1
