@@ -46,8 +46,9 @@ def main():
     step_losses = np.mean(horizon_cost_histories, axis=1)
 
     plt.rc("figure", autolayout=True)
-    plt.rc("text", usetex=True)
-    plt.rc("font", size=12)
+    if os.getenv("FAST").lower() != "true":
+        plt.rc("text", usetex=True)
+        plt.rc("font", size=12)
 
     # Plot the mean per-step cost of each MPC horizon with full trust.
     batches = horizon_cost_histories[:, :n_batches*exp3_batch].reshape((n_horizons, n_batches, exp3_batch))

@@ -1,4 +1,5 @@
 import itertools as it
+import os
 from pathlib import Path
 import sys
 
@@ -10,8 +11,9 @@ import seaborn as sns
 
 def main():
 
-    plt.rc("text", usetex=True)
-    plt.rc("font", size=12)
+    if os.getenv("FAST").lower() != "true":
+        plt.rc("text", usetex=True)
+        plt.rc("font", size=12)
 
     noises = ["gaussian", "walk"]
 

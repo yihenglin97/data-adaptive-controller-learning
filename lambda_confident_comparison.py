@@ -1,5 +1,7 @@
 """Compares GAPS against a FTL-type algorithm for confidence tuning."""
 
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -179,8 +181,9 @@ def main():
     #
     # Plotting.
     #
-    plt.rc("text", usetex=True)
-    plt.rc("font", size=11)
+    if os.getenv("FAST").lower() != "true":
+        plt.rc("text", usetex=True)
+        plt.rc("font", size=11)
     fig, axs = plt.subplots(2, 1, figsize=(4.0, 4.0), constrained_layout=True, sharex=True)
     ax_lam, ax_err = axs
 
