@@ -1,3 +1,5 @@
+"""Implements the GAPS gradient estimator."""
+
 import numpy as np
 
 

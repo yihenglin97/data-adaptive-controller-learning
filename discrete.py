@@ -1,3 +1,5 @@
+"""Selects the MPC horizon using BAPS."""
+
 import numpy as np
 
 from exp3 import exp3
@@ -51,4 +53,3 @@ class MPCHorizonSelector:
 
     def update_param(self, grads):
         pass
-

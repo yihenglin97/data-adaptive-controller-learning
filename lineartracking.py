@@ -1,3 +1,5 @@
+"""Environment for trajectory-tracking with LTI dynamics."""
+
 import numpy as np
 
 class LinearTracking:

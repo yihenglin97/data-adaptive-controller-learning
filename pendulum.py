@@ -1,4 +1,4 @@
-import argparse 
+import argparse
 
 import torch  # Must import before NumPy to avoid MKL double-link bug on Mac.
 import numpy as np

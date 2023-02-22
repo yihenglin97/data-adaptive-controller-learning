@@ -1,3 +1,8 @@
+"""Draws labels 'inline' on matplotlib plots, like in contour plots.
+
+from https://stackoverflow.com/a/39402483
+"""
+
 from math import atan2,degrees
 import numpy as np
 

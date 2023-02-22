@@ -1,3 +1,5 @@
+"""Model-predictive control for LTI system with GAPS confidence tuning."""
+
 from numba import njit
 import numpy as np
 from scipy import linalg as la

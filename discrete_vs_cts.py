@@ -1,5 +1,7 @@
-import os
+"""Compares MPC horizon selection (BAPS) vs. MPC confidence tuning (GAPS)."""
+
 import multiprocessing
+import os
 
 import matplotlib as mpl
 import numpy as np

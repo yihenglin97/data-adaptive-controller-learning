@@ -1,3 +1,5 @@
+"""Compares GAPS against a FTL-type algorithm for confidence tuning."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
